@@ -94,24 +94,11 @@ body {
 }
 
 /* =====================
-   Desktop: side-by-side if screen is wide enough
+   Desktop: still single column, just more padding
    ===================== */
 @media (min-width: 1024px) {
   .app-container {
-    flex-direction: column;
-    max-width: 900px;
-    padding: 2rem;
-    height: auto;
-    min-height: 100vh;
-  }
-
-  .editors-section {
-    flex-direction: row;
-    align-items: flex-start;
-  }
-
-  .editors-section > * {
-    flex: 1;
+    padding: 1.5rem;
   }
 }
 
