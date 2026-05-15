@@ -7,7 +7,7 @@ import {
   determineBatchStatus, 
   getBatchTitlePrefix 
 } from '../utils/calendarUtils';
-import { Check, Save, Plus, ArrowRight } from 'lucide-react';
+import { Check, Save, Plus, ArrowRight, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
 interface BatchEditorProps {
@@ -67,6 +67,10 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     setItems(items.map(item => ({ ...item, checked: true })));
   };
 
+  const deleteItem = (id: string) => {
+    setItems(items.filter(item => item.id !== id));
+  };
+
   const handleSave = () => {
     const validItems = items.filter(item => item.text.trim() !== '');
     if (validItems.length === 0) return;
@@ -114,21 +118,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         {initialEvent ? 'リストメモ' : 'リストメモ'}
       </h2>
 
-      {!initialEvent && (
-        <div className="time-grid">
-          {timeOptions.map(opt => (
-            <button
-              key={opt.value}
-              className={clsx('time-btn', selectedTime === opt.value && 'active')}
-              onClick={() => setSelectedTime(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
         <button className="btn btn-outline btn-sm" onClick={checkAll}>
           <Check size={16} /> 全部実行済み
         </button>
@@ -154,9 +144,46 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
               placeholder="やること"
               style={{ textDecoration: item.checked ? 'line-through' : 'none', opacity: item.checked ? 0.6 : 1 }}
             />
+            <button
+              onClick={() => deleteItem(item.id)}
+              title="削除"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                color: 'var(--text-muted)',
+                padding: '0.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                flexShrink: 0,
+                minWidth: '32px',
+                minHeight: '32px',
+                justifyContent: 'center',
+                borderRadius: 'var(--radius-sm)',
+                transition: 'var(--transition)',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         ))}
       </div>
+
+      {!initialEvent && (
+        <div className="time-grid" style={{ marginTop: '0.875rem' }}>
+          {timeOptions.map(opt => (
+            <button
+              key={opt.value}
+              className={clsx('time-btn', selectedTime === opt.value && 'active')}
+              onClick={() => setSelectedTime(opt.value)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
         <button className="btn btn-primary" onClick={handleSave} style={{ flex: 1 }}>

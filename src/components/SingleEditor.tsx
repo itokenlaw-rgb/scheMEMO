@@ -21,19 +21,20 @@ const timeOptions: { value: TimeOption; label: string }[] = [
 ];
 
 export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime = 'today' }) => {
-  const [text, setText] = useState('');
+  const [text, setText] = useState('□　');
   const [checked, setChecked] = useState(false);
   const [selectedTime, setSelectedTime] = useState<TimeOption>(defaultTime);
 
   const handleSave = () => {
-    if (!text.trim()) return;
+    const trimmed = text.replace(/^[□☑]\s*/, '').trim();
+    if (!trimmed) return;
     
     const { start, end } = calculateEventTime(selectedTime);
     const prefix = checked ? '☑' : '□';
     
     const newEvent: CalendarEvent = {
       id: `evt-${Date.now()}`,
-      title: `${prefix} ${text}`,
+      title: `${prefix} ${trimmed}`,
       start,
       end,
       memo: '',
@@ -42,14 +43,43 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
     };
     
     onSave(newEvent);
-    setText('');
+    setText('□　');
     setChecked(false);
+  };
+
+  const handleCheckToggle = () => {
+    const newChecked = !checked;
+    setChecked(newChecked);
+    // 先頭の□/☑を切り替える
+    const body = text.replace(/^[□☑]\s*/, '');
+    setText(`${newChecked ? '☑' : '□'}　${body}`);
   };
 
   return (
     <div className="card single-editor">
       <h2 className="card-title">クイックメモ</h2>
-      
+
+      <div className="input-group">
+        <button 
+          className={clsx('checkbox-btn', checked && 'checked')}
+          onClick={handleCheckToggle}
+          title="実行済にする"
+        >
+          {checked && <Check size={16} />}
+        </button>
+        <input 
+          type="text" 
+          className="text-input"
+          placeholder="□　やること"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+        />
+        <button className="btn btn-primary" onClick={handleSave}>
+          <Save size={18} /> 保存
+        </button>
+      </div>
+
       <div className="time-grid">
         {timeOptions.map(opt => (
           <button
@@ -60,27 +90,6 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
             {opt.label}
           </button>
         ))}
-      </div>
-
-      <div className="input-group">
-        <button 
-          className={clsx('checkbox-btn', checked && 'checked')}
-          onClick={() => setChecked(!checked)}
-          title="実行済にする"
-        >
-          {checked && <Check size={16} />}
-        </button>
-        <input 
-          type="text" 
-          className="text-input"
-          placeholder="英語の勉強"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-        />
-        <button className="btn btn-primary" onClick={handleSave}>
-          <Save size={18} /> 保存
-        </button>
       </div>
     </div>
   );
