@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, dateFnsLocalizer } from 'react-big-calendar';
+import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { ja } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
@@ -9,10 +9,11 @@ const locales = {
   'ja': ja,
 };
 
+// 月曜始まりにするため、startOfWeek に weekStartsOn: 1 を渡す
 const localizer = dateFnsLocalizer({
   format,
   parse,
-  startOfWeek,
+  startOfWeek: (date: Date) => startOfWeek(date, { weekStartsOn: 1 }),
   getDay,
   locales,
 });
@@ -24,7 +25,10 @@ interface CalendarViewProps {
 
 const CustomEvent: React.FC<{ event: CalendarEvent }> = ({ event }) => {
   return (
-    <div className={`custom-event-content ${event.status}`} style={{ height: '100%', width: '100%', padding: '2px 4px' }}>
+    <div
+      className={`custom-event-content ${event.status}`}
+      style={{ height: '100%', width: '100%', padding: '2px 4px' }}
+    >
       <span style={{ fontWeight: 600 }}>{event.title}</span>
     </div>
   );
@@ -38,6 +42,9 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
       startAccessor="start"
       endAccessor="end"
       culture="ja"
+      // 月表示に固定し、ツールバーの表示切替ボタンを非表示にする
+      defaultView={Views.MONTH}
+      views={[Views.MONTH]}
       onSelectEvent={onSelectEvent}
       components={{
         event: CustomEvent,
@@ -46,7 +53,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
         let className = '';
         if (event.status === 'checked') className = 'checked';
         if (event.status === 'partial') className = 'partial';
-        
         return { className };
       }}
       messages={{
@@ -60,7 +66,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
         date: '日付',
         time: '時間',
         event: 'イベント',
-        noEventsInRange: 'この期間に予定はありません。'
+        noEventsInRange: 'この期間に予定はありません。',
       }}
     />
   );

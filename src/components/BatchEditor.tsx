@@ -111,7 +111,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   return (
     <div className="card batch-editor">
       <h2 className="card-title">
-        {initialEvent ? 'やること編集' : 'たくさん書き込み (やること)'}
+        {initialEvent ? 'リストメモ' : 'リストメモ'}
       </h2>
 
       {!initialEvent && (

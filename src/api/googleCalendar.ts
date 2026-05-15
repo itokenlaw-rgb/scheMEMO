@@ -7,7 +7,7 @@ const BASE_URL = 'https://www.googleapis.com/calendar/v3';
 export const fetchGoogleEvents = async (accessToken: string): Promise<CalendarEvent[]> => {
   const timeMin = new Date();
   timeMin.setMonth(timeMin.getMonth() - 3);
-  
+
   const timeMax = new Date();
   timeMax.setMonth(timeMax.getMonth() + 3);
 
@@ -21,14 +21,15 @@ export const fetchGoogleEvents = async (accessToken: string): Promise<CalendarEv
   );
 
   if (!response.ok) {
-    throw new Error('Failed to fetch events');
+    throw new Error(`Failed to fetch events: ${response.status}`);
   }
 
   const data = await response.json();
-  
-  return data.items
-    .filter((item: any) => item.summary && (item.summary.startsWith('□') || item.summary.startsWith('☑') || item.summary.startsWith('△')))
-    .map((item: any) => convertFromGoogleEvent(item));
+
+  // フィルタなし：すべての予定を変換して返す
+  return (data.items as any[])
+    .filter((item) => item.summary) // タイトルが空のものだけ除外
+    .map((item) => convertFromGoogleEvent(item));
 };
 
 export const createGoogleEvent = async (accessToken: string, event: CalendarEvent): Promise<CalendarEvent> => {
@@ -95,7 +96,6 @@ const convertToGoogleEvent = (event: CalendarEvent) => {
       dateTime: event.end.toISOString(),
       timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     },
-    // Prevent default reminders
     reminders: {
       useDefault: false,
       overrides: [],
@@ -105,21 +105,32 @@ const convertToGoogleEvent = (event: CalendarEvent) => {
 
 const convertFromGoogleEvent = (gEvent: any): CalendarEvent => {
   const title = gEvent.summary || '';
-  const isBatch = title.includes('やること') && (title.startsWith('□') || title.startsWith('☑') || title.startsWith('△'));
-  
+
+  // scheMEMO 管理イベント判定（□/☑/△ で始まる「やること」イベント）
+  const isBatch =
+    title.includes('やること') &&
+    (title.startsWith('□') || title.startsWith('☑') || title.startsWith('△'));
+
   let status: 'unchecked' | 'partial' | 'checked' = 'unchecked';
   if (isBatch) {
-      const items = parseBatchMemo(gEvent.description || '');
-      status = determineBatchStatus(items);
-  } else {
-      if (title.startsWith('☑')) status = 'checked';
+    const items = parseBatchMemo(gEvent.description || '');
+    status = determineBatchStatus(items);
+  } else if (title.startsWith('☑')) {
+    status = 'checked';
   }
+
+  // 終日イベント（dateTime でなく date のみのもの）は時刻を 0:00〜23:59 に補完
+  const startRaw = gEvent.start?.dateTime ?? gEvent.start?.date;
+  const endRaw   = gEvent.end?.dateTime   ?? gEvent.end?.date;
+
+  const startDate = new Date(startRaw);
+  const endDate   = new Date(endRaw);
 
   return {
     id: gEvent.id,
-    title: title,
-    start: new Date(gEvent.start.dateTime || gEvent.start.date),
-    end: new Date(gEvent.end.dateTime || gEvent.end.date),
+    title,
+    start: startDate,
+    end: endDate,
     memo: gEvent.description || '',
     status,
     isBatch,

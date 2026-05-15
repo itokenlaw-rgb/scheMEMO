@@ -48,7 +48,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
 
   return (
     <div className="card single-editor">
-      <h2 className="card-title">単発メモ</h2>
+      <h2 className="card-title">クイックメモ</h2>
       
       <div className="time-grid">
         {timeOptions.map(opt => (
