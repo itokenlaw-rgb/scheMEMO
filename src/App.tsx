@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
 import { BatchEditor } from './components/BatchEditor';
-import type { CalendarEvent, BatchItem, TimeOption } from './types';
+import type { CalendarEvent, BatchItem, TimeOption, EventStatus } from './types';
 import { getMockEvents, addMockEvent, updateMockEvent, calculateEventTime, stringifyBatchMemo } from './utils/calendarUtils';
 import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent } from './api/googleCalendar';
-import { Calendar as CalendarIcon, Settings, User, LogIn, LogOut, RefreshCw } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings, LogIn, LogOut, RefreshCw } from 'lucide-react';
 
 function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -136,7 +136,7 @@ function App() {
     if (event.isBatch) {
       setSelectedEvent(event);
     } else {
-      const newStatus = event.status === 'checked' ? 'unchecked' : 'checked';
+      const newStatus = (event.status === 'checked' ? 'unchecked' : 'checked') as EventStatus;
       const newTitle = newStatus === 'checked' ? event.title.replace('□', '☑') : event.title.replace('☑', '□');
       const updatedEvent = { ...event, status: newStatus, title: newTitle };
       
