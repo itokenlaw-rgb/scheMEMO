@@ -26,7 +26,7 @@ function App() {
   const logout = () => {
     setAccessToken(null);
     localStorage.removeItem('google_access_token');
-    setEvents(getMockEvents()); // Revert to mock on logout
+    setEvents(getMockEvents());
   };
 
   useEffect(() => {
@@ -47,7 +47,7 @@ function App() {
     } catch (error) {
       console.error("Failed to fetch events", error);
       if ((error as any).message?.includes('401')) {
-        logout(); // Token expired
+        logout();
       }
     } finally {
       setIsLoading(false);
@@ -159,33 +159,33 @@ function App() {
 
   return (
     <div className="app-container">
-      <div className="left-panel">
-        <header className="app-header">
-          <div className="app-logo">
-            <CalendarIcon size={28} />
-            scheMEMO
-          </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {accessToken ? (
-              <>
-                <button className="btn btn-outline btn-sm" onClick={refreshEvents} title="更新" style={{ padding: '0.5rem' }}>
-                  <RefreshCw size={18} className={isLoading ? 'spin' : ''} />
-                </button>
-                <button className="btn btn-outline btn-sm" onClick={logout} title="ログアウト" style={{ padding: '0.5rem' }}>
-                  <LogOut size={18} />
-                </button>
-              </>
-            ) : (
-              <button className="btn btn-primary btn-sm" onClick={() => login()} title="Googleログイン">
-                <LogIn size={18} /> ログイン
+      <header className="app-header">
+        <div className="app-logo">
+          <CalendarIcon size={24} />
+          scheMEMO
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {accessToken ? (
+            <>
+              <button className="btn btn-outline btn-sm" onClick={refreshEvents} title="更新" style={{ padding: '0.5rem' }}>
+                <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
               </button>
-            )}
-            <button className="btn btn-outline btn-sm" style={{ padding: '0.5rem' }}>
-              <Settings size={18} />
+              <button className="btn btn-outline btn-sm" onClick={logout} title="ログアウト" style={{ padding: '0.5rem' }}>
+                <LogOut size={16} />
+              </button>
+            </>
+          ) : (
+            <button className="btn btn-primary btn-sm" onClick={() => login()} title="Googleログイン">
+              <LogIn size={16} /> ログイン
             </button>
-          </div>
-        </header>
+          )}
+          <button className="btn btn-outline btn-sm" style={{ padding: '0.5rem' }}>
+            <Settings size={16} />
+          </button>
+        </div>
+      </header>
 
+      <div className="editors-section">
         <SingleEditor onSave={handleSaveSingle} />
         
         <BatchEditor 
@@ -195,8 +195,8 @@ function App() {
           onClose={() => setSelectedEvent(null)}
         />
       </div>
-      
-      <div className="right-panel">
+
+      <div className="calendar-section">
         <CalendarView 
           events={events} 
           onSelectEvent={handleSelectEvent}
