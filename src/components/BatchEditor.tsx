@@ -32,16 +32,18 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   const [items, setItems] = useState<BatchItem[]>([]);
   const [selectedTime, setSelectedTime] = useState<TimeOption>('today');
   const [carryOverTime, setCarryOverTime] = useState<TimeOption>('tomorrow');
+  const [memoTitle, setMemoTitle] = useState('□MEMO');
 
   useEffect(() => {
     if (initialEvent && initialEvent.isBatch) {
+      setMemoTitle(initialEvent.title);
       setItems(parseBatchMemo(initialEvent.memo));
     } else {
-      // Default 3 items
+      setMemoTitle('□MEMO');
       setItems([
-        { id: `item-1`, text: '', checked: false },
-        { id: `item-2`, text: '', checked: false },
-        { id: `item-3`, text: '', checked: false },
+        { id: `item-1`, text: '□　', checked: false },
+        { id: `item-2`, text: '□　', checked: false },
+        { id: `item-3`, text: '□　', checked: false },
       ]);
     }
   }, [initialEvent]);
@@ -57,7 +59,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   const addItems = () => {
     const newItems = Array(3).fill(null).map((_, i) => ({
       id: `item-${Date.now()}-${i}`,
-      text: '',
+      text: '□　',
       checked: false
     }));
     setItems([...items, ...newItems]);
@@ -72,33 +74,30 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   };
 
   const handleSave = () => {
-    const validItems = items.filter(item => item.text.trim() !== '');
+    const validItems = items.filter(item => item.text.replace(/^[□☑]\s*/, '').trim() !== '');
     if (validItems.length === 0) return;
 
     const status = determineBatchStatus(validItems);
     const prefix = getBatchTitlePrefix(status);
-    const title = `${prefix} やること`;
-    const memo = stringifyBatchMemo(validItems);
+    const rawTitle = memoTitle.replace(/^[□☑△]\s*/, '').trim() || 'やること';
+    const title = `${prefix} ${rawTitle}`;
+    const memo = stringifyBatchMemo(validItems.map(i => ({
+      ...i,
+      text: i.text.replace(/^[□☑]\s*/, '').trim()
+    })));
 
     if (initialEvent) {
-      onSave({
-        ...initialEvent,
-        title,
-        memo,
-        status,
-      });
+      onSave({ ...initialEvent, title, memo, status });
     } else {
       const { start, end } = calculateEventTime(selectedTime);
-      onSave({
-        id: `evt-${Date.now()}`,
-        title,
-        start,
-        end,
-        memo,
-        status,
-        isBatch: true
-      });
+      onSave({ id: `evt-${Date.now()}`, title, start, end, memo, status, isBatch: true });
     }
+    setMemoTitle('□MEMO');
+    setItems([
+      { id: `item-${Date.now()}-1`, text: '□　', checked: false },
+      { id: `item-${Date.now()}-2`, text: '□　', checked: false },
+      { id: `item-${Date.now()}-3`, text: '□　', checked: false },
+    ]);
     onClose();
   };
 
@@ -114,9 +113,15 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
 
   return (
     <div className="card batch-editor">
-      <h2 className="card-title">
-        {initialEvent ? 'リストメモ' : 'リストメモ'}
-      </h2>
+      <div className="card-title" style={{ gap: '0.5rem' }}>
+        <input
+          type="text"
+          className="text-input"
+          value={memoTitle}
+          onChange={(e) => setMemoTitle(e.target.value)}
+          style={{ fontWeight: 700, fontSize: '1.1rem', flex: 1 }}
+        />
+      </div>
 
       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
         <button className="btn btn-outline btn-sm" onClick={checkAll}>
@@ -141,7 +146,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
               className="text-input"
               value={item.text}
               onChange={(e) => handleTextChange(item.id, e.target.value)}
-              placeholder="やること"
+              placeholder="□　やること"
               style={{ textDecoration: item.checked ? 'line-through' : 'none', opacity: item.checked ? 0.6 : 1 }}
             />
             <button

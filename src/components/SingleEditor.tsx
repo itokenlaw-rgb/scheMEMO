@@ -70,7 +70,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
         <input 
           type="text" 
           className="text-input"
-          placeholder="□　やること"
+          placeholder="□やること"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSave()}
