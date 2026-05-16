@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { Save, X } from 'lucide-react';
 import type {
   TimeSettings,
-  TodaySettings,
   DayOfWeek,
 } from '../types/settings';
 import { DEFAULT_TIME_SETTINGS, saveSettings } from '../types/settings';
@@ -35,8 +34,12 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
   ) => {
     setS(prev => ({
       ...prev,
-      [key]: { ...prev[key], ...val },
+      [key]: { ...prev[key] as object, ...val },
     }));
+  };
+
+  const setDirect = <K extends keyof TimeSettings>(key: K, val: TimeSettings[K]) => {
+    setS(prev => ({ ...prev, [key]: val }));
   };
 
   const handleSave = () => {
@@ -53,7 +56,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
       marginBottom: '1rem',
       boxShadow: 'var(--shadow-md)',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'between', alignItems: 'center', marginBottom: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <h2 style={{ fontSize: '1.1rem', fontWeight: 600, margin: 0 }}>時間マッピング設定</h2>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
           <X size={18} />
@@ -198,6 +201,73 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </Row>
         </div>
 
+        {/* ★ 追加セクション：抽出・統合・完了タスクの挙動設定 */}
+        <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '2px solid var(--border)' }}>
+          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
+            抽出・統合・完了タスクの設定
+          </div>
+          
+          {/* 【１】完了タスクの削除オプション */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.8rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <input
+                type="checkbox"
+                checked={s.deletePastCompleted ?? false}
+                onChange={e => setDirect('deletePastCompleted', e.target.checked)}
+                style={{ accentColor: 'var(--primary)' }}
+              />
+              過去の完了タスクは削除する
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}>
+              <input
+                type="checkbox"
+                checked={s.deleteFutureCompleted ?? false}
+                onChange={e => setDirect('deleteFutureCompleted', e.target.checked)}
+                style={{ accentColor: 'var(--primary)' }}
+              />
+              将来の完了タスクは削除する
+            </label>
+          </div>
+
+          {/* 【２】□MEMOの抽出範囲設定 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.5rem', fontSize: '0.85rem', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 500, minWidth: '130px' }}>□MEMOの抽出範囲</span>
+            <input
+              type="number"
+              value={s.memoDaysBefore}
+              onChange={e => setDirect('memoDaysBefore', Math.max(0, Number(e.target.value)))}
+              style={{ width: '50px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: '4px', textAlign: 'center', background: 'var(--background)', color: 'var(--text-main)' }}
+            />
+            <span>日前 から</span>
+            <input
+              type="number"
+              value={s.memoDaysAfter}
+              onChange={e => setDirect('memoDaysAfter', Math.max(0, Number(e.target.value)))}
+              style={{ width: '50px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: '4px', textAlign: 'center', background: 'var(--background)', color: 'var(--text-main)' }}
+            />
+            <span>日後 まで</span>
+          </div>
+
+          {/* 【３】タスクをまとめる範囲設定 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.85rem', flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 500, minWidth: '130px' }}>タスクをまとめる範囲</span>
+            <input
+              type="number"
+              value={s.mergeDaysBefore}
+              onChange={e => setDirect('mergeDaysBefore', Math.max(0, Number(e.target.value)))}
+              style={{ width: '50px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: '4px', textAlign: 'center', background: 'var(--background)', color: 'var(--text-main)' }}
+            />
+            <span>日前 から</span>
+            <input
+              type="number"
+              value={s.mergeDaysAfter}
+              onChange={e => setDirect('mergeDaysAfter', Math.max(0, Number(e.target.value)))}
+              style={{ width: '50px', padding: '0.2rem', border: '1px solid var(--border)', borderRadius: '4px', textAlign: 'center', background: 'var(--background)', color: 'var(--text-main)' }}
+            />
+            <span>日後 まで</span>
+          </div>
+        </div>
+
       </div>
 
       <button
@@ -231,50 +301,4 @@ const Radio: React.FC<{
     gap: '0.25rem',
     cursor: 'pointer',
     fontSize: '0.875rem',
-    flexWrap: 'wrap',
-  }} : any>
-    <input
-      type="radio"
-      name={name}
-      value={value}
-      checked={checked}
-      onChange={onChange}
-      style={{ accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
-    />
-    {children}
-  </label>
-);
-
-const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.375rem' }}>
-    {children}
-  </div>
-);
-
-const SubRow: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div style={{\n    display: 'flex',\n    alignItems: 'center',\n    gap: '0.375rem',\n    flexWrap: 'wrap',\n    marginTop: '0.375rem',\n    marginLeft: '1.5rem',\n    fontSize: '0.8125rem',\n  }}>\n    {children}\n  </div>\n);
-
-const Sel: React.FC<{
-  value: string;
-  onChange: (v: string) => void;
-  children: React.ReactNode;
-  disabled?: boolean;
-}> = ({ value, onChange, children, disabled }) => (
-  <select
-    value={value}
-    onChange={e => onChange(e.target.value)}
-    disabled={disabled}
-    style={{
-      background: 'var(--background)',
-      border: '1px solid var(--border)',
-      borderRadius: 'var(--radius-sm)',
-      padding: '0.25rem 0.5rem',
-      fontSize: '0.85rem',
-      color: 'var(--text-main)',
-      cursor: disabled ? 'not-allowed' : 'pointer',
-      opacity: disabled ? 0.6 : 1,
-    }}
-  >
-    {children}
-  </select>
-);
+    flexWrap: 'wrap
