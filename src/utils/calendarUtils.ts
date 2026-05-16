@@ -183,3 +183,101 @@ export const updateMockEvent = (updated: CalendarEvent) => {
 export const deleteMockEvent = (id: string) => {
   mockEvents = mockEvents.filter(e => e.id !== id);
 };
+
+// src/utils/calendarUtils.ts (末尾などに追記)
+
+import { subDays, addDays, startOfDay, endOfDay } from 'date-fns';
+import type { CalendarEvent, BatchItem } from '../types';
+import type { TimeSettings } from '../types/settings';
+
+/**
+ * 設定された条件に基づき、指定の日付範囲から「□MEMO」で始まるタスクを抽出し、
+ * 1つの仮想的なバッチイベントオブジェクトを生成します。
+ */
+export const extractMemosFromSettingsRange = (
+  events: CalendarEvent[],
+  settings: TimeSettings,
+  baseDate: Date = new Date()
+): CalendarEvent => {
+  const daysBefore = settings.memoDaysBefore ?? 0;
+  const daysAfter = settings.memoDaysAfter ?? 7;
+
+  // 抽出対象の開始日時・終了日時
+  const startRange = startOfDay(subDays(baseDate, daysBefore));
+  const endRange = endOfDay(addDays(baseDate, daysAfter));
+  const now = new Date();
+
+  const combinedItems: BatchItem[] = [];
+
+  events.forEach(event => {
+    const eventStart = new Date(event.start);
+
+    // 1. 日付範囲内かチェック
+    if (eventStart >= startRange && eventStart <= endRange) {
+      // 2. タイトルが「□MEMO」または「□」「☑」等で始まるか
+      const isTargetTitle = event.title.startsWith('□MEMO') || 
+                            event.title.startsWith('□ MEMO') || 
+                            event.title.startsWith('□') || 
+                            event.title.startsWith('☑');
+
+      if (isTargetTitle) {
+        const isPast = eventStart < startOfDay(now);
+
+        if (event.isBatch && event.memo) {
+          // バッチ予定のパース
+          const items = parseBatchMemo(event.memo);
+          items.forEach(item => {
+            // 【１】完了タスクの削除条件チェック
+            if (item.checked) {
+              if (isPast && settings.deletePastCompleted) return;    // 過去の完了タスクをスキップ
+              if (!isPast && settings.deleteFutureCompleted) return;  // 将来の完了タスクをスキップ
+            }
+            combinedItems.push({
+              id: `ext-${Date.now()}-${Math.random()}`,
+              text: item.text,
+              checked: item.checked
+            });
+          });
+        } else {
+          // シングル予定のパース
+          const taskText = event.title.replace(/^[□☑]\s*(MEMO)?\s*/, '').trim();
+          const isChecked = event.status === 'checked';
+
+          if (taskText) {
+            // 【１】完了タスクの削除条件チェック
+            if (isChecked) {
+              if (isPast && settings.deletePastCompleted) return;
+              if (!isPast && settings.deleteFutureCompleted) return;
+            }
+            combinedItems.push({
+              id: `ext-${Date.now()}-${Math.random()}`,
+              text: taskText,
+              checked: isChecked
+            });
+          }
+        }
+      }
+    }
+  });
+
+  // テキストの重複を排除して綺麗にする
+  const uniqueItems: BatchItem[] = [];
+  const seenTexts = new Set<string>();
+  combinedItems.forEach(item => {
+    if (!seenTexts.has(item.text)) {
+      seenTexts.add(item.text);
+      uniqueItems.push(item);
+    }
+  });
+
+  // BatchEditorへそのまま渡せる「まとめ用」の仮想バッチオブジェクト
+  return {
+    id: 'evt-extracted-memo-summary', // 新規、または上書き用の仮ID
+    title: '□ MEMO',
+    start: new Date(),
+    end: new Date(),
+    memo: stringifyBatchMemo(uniqueItems),
+    status: determineBatchStatus(uniqueItems),
+    isBatch: true
+  };
+};
