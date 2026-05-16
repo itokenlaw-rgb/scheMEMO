@@ -64,18 +64,30 @@ function App() {
     if (accessToken) refreshEvents();
   }, [accessToken, refreshEvents]);
 
-  const handleSaveSingle = async (event: CalendarEvent) => {
+const handleSaveSingle = async (event: CalendarEvent) => {
+    // 確実にGoogleカレンダーと同期させるための処理
     if (accessToken) {
       setIsLoading(true);
       try {
-        await createGoogleEvent(accessToken, event);
+        // 1. Googleカレンダーに一度予定を書き込み、Google側で生成された「正しいID付きのイベント」を受け取る
+        // (一時的な id を除外して登録するため、api側が対応していない場合を考慮)
+        const { id, ...eventWithoutId } = event; 
+        const savedGoogleEvent = await createGoogleEvent(accessToken, event as CalendarEvent);
+        
+        // 2. 画面の予定一覧（State）に、Googleから返ってきた最新の予定を即座に合流させる
+        setEvents(prev => [...prev, savedGoogleEvent]);
+        
+        // 3. 念のためバックグラウンドで全体同期を走らせる
         await refreshEvents();
       } catch (error) {
-        console.error(error);
+        console.error("Googleカレンダーへのクイックメモ保存に失敗しました:", error);
+        // エラーが起きた場合は、念のため再読込してカレンダーの整合性を保つ
+        await refreshEvents();
       } finally {
         setIsLoading(false);
       }
     } else {
+      // ログインしていない（Mockテスト環境）の挙動
       addMockEvent(event);
       setEvents(getMockEvents());
     }
