@@ -53,25 +53,23 @@ function App() {
     else setEvents(getMockEvents());
   }, []);
 
-const refreshEvents = useCallback(async () => {
+  const refreshEvents = useCallback(async () => {
     if (!accessToken) return;
     try {
       setIsLoading(true);
 
-      // 1. scheMEMO上にあって、まだGoogleカレンダーに保存されていない予定（未同期の予定）を抽出
-      // id が 'evt-' で始まっているものは、アプリ側で仮発行した未同期のデータです
-      const un-syncedEvents = events.filter(event => event.id.startsWith('evt-'));
+      // ✅ 変数名のハイフンを修正しました (un-syncedEvents -> unSyncedEvents)
+      const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
 
-      if (un-syncedEvents.length > 0) {
-        console.log(`${un-syncedEvents.length}件の未同期予定をGoogleカレンダーに反映中...`);
+      if (unSyncedEvents.length > 0) {
+        console.log(`${unSyncedEvents.length}件の未同期予定をGoogleカレンダーに反映中...`);
         
         // 未同期の予定を1件ずつGoogleカレンダーAPIに送信して登録
-        for (const event of un-syncedEvents) {
+        for (const event of unSyncedEvents) {
           try {
             await createGoogleEvent(accessToken, event);
           } catch (createError) {
             console.error(`予定「${event.title}」の同期に失敗しました:`, createError);
-            // 1件失敗しても他の予定の同期を止めないようにキャッチします
           }
         }
       }
