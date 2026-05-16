@@ -2,7 +2,7 @@
 import type { TimeOption } from '../types';
 import type { TimeSettings } from '../types/settings';
 import { loadSettings } from '../types/settings';
-import { setHours, setMinutes, startOfDay, addDays, endOfDay, addWeeks, addMonths } from 'date-fns';
+import { startOfDay, addDays, endOfDay, addWeeks, addMonths } from 'date-fns'; // ✅ 不要なインポートを削除
 
 function parseTime(t: string): { h: number; m: number } {
   if (!t || !t.includes(':')) return { h: 9, m: 0 };
@@ -76,7 +76,7 @@ export function calculateEventTimeWithSettings(
 
     case 'endOfMonth': {
       const s = settings.endOfMonth;
-      let target = new Date(now.getFullYear(), now.getMonth() + 1, 0); // 月末日
+      let target = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       if (s.mode === 'fixed') {
         const day = Math.min(s.day, target.getDate());
         target = new Date(now.getFullYear(), now.getMonth(), day);

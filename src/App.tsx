@@ -4,7 +4,7 @@ import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
 import { BatchEditor } from './components/BatchEditor';
 import { SettingsPanel } from './components/SettingsPanel';
-import type { CalendarEvent, BatchItem, TimeOption } from './types';
+import type { CalendarEvent, BatchItem, EventStatus } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
 import { 
@@ -139,7 +139,8 @@ function App() {
     if (event.isBatch) {
       setSelectedEvent(event);
     } else {
-      const newStatus = event.status === 'checked' ? 'unchecked' : 'checked';
+      // ✅ 型を明確にするため、as EventStatus を追加して型不一致エラーを解消しました
+      const newStatus = (event.status === 'checked' ? 'unchecked' : 'checked') as EventStatus;
       const newTitle = newStatus === 'checked' ? event.title.replace('□', '☑') : event.title.replace('☑', '□');
       const updatedEvent = { ...event, status: newStatus, title: newTitle };
       if (accessToken && !event.id.startsWith('evt-')) {
