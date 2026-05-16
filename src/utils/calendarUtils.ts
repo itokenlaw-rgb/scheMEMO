@@ -1,4 +1,4 @@
-import { addHours, addDays, nextFriday, endOfMonth, setHours, setMinutes, startOfDay, addWeeks, addMonths } from 'date-fns';
+import { addHours, addDays, nextFriday, endOfMonth, setHours, setMinutes, startOfDay, addWeeks, addMonths, isAfter, isBefore } from 'date-fns';
 import type { TimeOption, CalendarEvent, BatchItem, EventStatus } from '../types';
 
 export const calculateEventTime = (option: TimeOption, baseDate: Date = new Date()): { start: Date, end: Date } => {
@@ -92,6 +92,81 @@ export const getBatchTitlePrefix = (status: EventStatus) => {
   if (status === 'checked') return '☑';
   if (status === 'partial') return '△';
   return '□';
+};
+
+/**
+ * 今日から1週間以内の未完了メモ（タイトルが「□」から始まるもの）をスキャンして
+ * 本日の21時配置の1つの「□ MEMO」イベントに統合するためのオブジェクトを生成します。
+ */
+export const consolidateWeeklyMemos = (events: CalendarEvent[]): { mergedEvent: CalendarEvent; targetIds: string[] } => {
+  const now = new Date();
+  const oneWeekLater = addDays(startOfDay(now), 7);
+  const startOfToday = startOfDay(now);
+
+  const targetIds: string[] = [];
+  const combinedItems: BatchItem[] = [];
+
+  // 今日から7日以内のイベントを精査
+  events.forEach((event) => {
+    const eventDate = new Date(event.start);
+    // 日付が今日以降かつ1週間以内
+    const isInRange = (eventDate >= startOfToday || isAfter(eventDate, startOfToday)) && isBefore(eventDate, oneWeekLater);
+    
+    // かつ、タイトルが「□」から始まる未完了メモが対象
+    if (isInRange && event.title.trim().startsWith('□')) {
+      targetIds.push(event.id);
+
+      if (event.isBatch) {
+        // バッチ予定の場合はメモ欄を解析して、未完了のものだけを抽出
+        const parsedItems = parseBatchMemo(event.memo);
+        parsedItems.forEach(item => {
+          if (!item.checked && item.text.trim() !== '') {
+            combinedItems.push({
+              id: `item-${Date.now()}-${combinedItems.length}`,
+              text: item.text.trim(),
+              checked: false
+            });
+          }
+        });
+      } else {
+        // シングル予定の場合はタイトルからタスク文字列を抽出
+        const taskText = event.title.replace(/^□\s*/, '').trim();
+        if (taskText) {
+          combinedItems.push({
+            id: `item-${Date.now()}-${combinedItems.length}`,
+            text: taskText,
+            checked: false
+          });
+        }
+      }
+    }
+  });
+
+  // 重複した表現（やることテキスト）を排除して綺麗にする
+  const uniqueItems: BatchItem[] = [];
+  const seenTexts = new Set<string>();
+  combinedItems.forEach(item => {
+    if (!seenTexts.has(item.text)) {
+      seenTexts.add(item.text);
+      uniqueItems.push(item);
+    }
+  });
+
+  // 統合後の「□ MEMO」の時間を本日21:00〜21:30に設定
+  const start = setHours(setMinutes(new Date(), 0), 21);
+  const end = setHours(setMinutes(new Date(), 30), 21);
+
+  const mergedEvent: CalendarEvent = {
+    id: `evt-${Date.now()}-merged`,
+    title: '□ MEMO',
+    start,
+    end,
+    memo: stringifyBatchMemo(uniqueItems),
+    status: 'unchecked',
+    isBatch: true
+  };
+
+  return { mergedEvent, targetIds };
 };
 
 // Mock Google Calendar state
