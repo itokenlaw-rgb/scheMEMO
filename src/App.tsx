@@ -1,6 +1,5 @@
 // src/App.tsx
 import { useState, useEffect, useCallback } from 'react';
-import { useGoogleLogin } from '@react-oauth/google';
 import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
 import { BatchEditor } from './components/BatchEditor';
@@ -22,29 +21,50 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
+  // 【１】更新ボタンを1回だけくるっと回すためのアニメーション管理ステート
+  const [isSpinning, setIsSpinning] = useState(false);
+
   useEffect(() => {
     const token = localStorage.getItem('google_access_token');
     if (token) setAccessToken(token);
     else setEvents(getMockEvents());
   }, []);
 
+  // 【２】「画面の予定をGoogleへ反映」させた後に「Googleの予定を画面に表示」する双方向同期ロジック
   const refreshEvents = useCallback(async () => {
     if (!accessToken) return;
+    
+    // 【１】ボタン押下時に1回転アニメーションを開始
+    setIsSpinning(true);
+
     try {
+      // Step A: scheMEMO側の未同期予定（IDがevt-から始まる仮データ）を抽出
       const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
+      
       if (unSyncedEvents.length > 0) {
+        console.log(`${unSyncedEvents.length}件の未同期データをGoogleカレンダーに保存中...`);
+        // scheMEMO -> Googleカレンダーへ書き出して同期
         for (const event of unSyncedEvents) {
           try {
             await createGoogleEvent(accessToken, event);
           } catch (err) {
-            console.error(err);
+            console.error(`「${event.title}」の保存に失敗しました:`, err);
           }
         }
       }
+
+      // Step B: 書き出し完了後、Googleカレンダーから最新の予定を再取得
       const fetchedEvents = await fetchGoogleEvents(accessToken);
+      // Googleカレンダー -> scheMEMOへ表示を反映
       setEvents(fetchedEvents);
+
     } catch (error) {
-      console.error(error);
+      console.error('同期処理中にエラーが発生しました:', error);
+    } finally {
+      // 1回転アニメーション（CSS側が1秒で1周するため）が終わる頃にフラグをオフにする
+      setTimeout(() => {
+        setIsSpinning(false);
+      }, 800);
     }
   }, [accessToken, events]);
 
@@ -62,14 +82,12 @@ function App() {
     }
   }, [accessToken]);
 
-  const login = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      setAccessToken(tokenResponse.access_token);
-      localStorage.setItem('google_access_token', tokenResponse.access_token);
-    },
-    scope: 'https://www.googleapis.com/auth/calendar.events',
-    onError: (error) => console.log('Login Failed:', error),
-  });
+  // OAuth未実装環境でも動く仮のログイン処理
+  const simulateLogin = () => {
+    const dummyToken = 'mock_access_token_for_dev';
+    setAccessToken(dummyToken);
+    localStorage.setItem('google_access_token', dummyToken);
+  };
 
   const logout = () => {
     setAccessToken(null);
@@ -214,16 +232,16 @@ function App() {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-          {/* 【２】上部にGoogleカレンダーログイン/ログアウトボタンを配置 */}
           {accessToken ? (
             <>
+              {/* 【１】更新ボタン：isSpinningがtrueの間だけ「spin」クラスを付与して1回転させます */}
               <button
                 className="btn btn-outline btn-sm"
                 onClick={refreshEvents}
                 title="カレンダーを更新・同期"
                 style={{ padding: '0.4rem', minHeight: '34px' }}
               >
-                <RefreshCw size={16} />
+                <RefreshCw size={16} className={isSpinning ? 'spin' : ''} />
               </button>
               <button 
                 className="btn btn-outline btn-sm" 
@@ -237,7 +255,7 @@ function App() {
           ) : (
             <button 
               className="btn btn-primary btn-sm" 
-              onClick={() => login()} 
+              onClick={simulateLogin} 
               title="Googleカレンダーにログイン・連携" 
               style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
             >
@@ -265,12 +283,9 @@ function App() {
       )}
 
       <div className="editors-section">
-        {/* クイックメモ機能 */}
         <SingleEditor onSave={handleSaveSingle} />
         
-        {/* 【１】クイックメモ機能とバッチ機能の間に横並びのボタンを配置 */}
         <div style={{ display: 'flex', gap: '1rem', width: '100%', margin: '0.5rem 0' }}>
-          {/* 左側：タスクをまとめるボタン */}
           <button
             className="btn btn-secondary"
             onClick={handleMergeWeeklyMemos}
@@ -279,7 +294,6 @@ function App() {
             <Layers size={18} /> タスクをまとめる
           </button>
 
-          {/* 右側：MEMOを編集ボタン */}
           <button
             className="btn btn-outline"
             onClick={handleMergeMemosClick}
@@ -289,7 +303,6 @@ function App() {
           </button>
         </div>
 
-        {/* バッチ機能 */}
         <BatchEditor
           onSave={handleSaveBatch}
           onCarryOver={handleCarryOver}
