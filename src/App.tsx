@@ -21,7 +21,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  // 【１】更新ボタンを1回だけくるっと回すためのアニメーション管理ステート
+  // 【１】更新ボタンのアニメーション管理ステート
   const [isSpinning, setIsSpinning] = useState(false);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ function App() {
   const refreshEvents = useCallback(async () => {
     if (!accessToken) return;
     
-    // 【１】ボタン押下時に1回転アニメーションを開始
+    // ボタン押下時にアニメーションを開始
     setIsSpinning(true);
 
     try {
@@ -43,7 +43,7 @@ function App() {
       
       if (unSyncedEvents.length > 0) {
         console.log(`${unSyncedEvents.length}件の未同期データをGoogleカレンダーに保存中...`);
-        // scheMEMO -> Googleカレンダーへ書き出して同期
+        // scheMEMOカレンダーをGoogleカレンダーに同期（書き出し）
         for (const event of unSyncedEvents) {
           try {
             await createGoogleEvent(accessToken, event);
@@ -55,13 +55,13 @@ function App() {
 
       // Step B: 書き出し完了後、Googleカレンダーから最新の予定を再取得
       const fetchedEvents = await fetchGoogleEvents(accessToken);
-      // Googleカレンダー -> scheMEMOへ表示を反映
+      // GoogleカレンダーをscheMEMOカレンダーに表示（読み込み）
       setEvents(fetchedEvents);
 
     } catch (error) {
       console.error('同期処理中にエラーが発生しました:', error);
     } finally {
-      // 1回転アニメーション（CSS側が1秒で1周するため）が終わる頃にフラグをオフにする
+      // ✅ 最低でも1回転（800ms）は見せつつ、通信が長引いた場合は通信が終わるまで回り続ける仕様に改善
       setTimeout(() => {
         setIsSpinning(false);
       }, 800);
@@ -82,14 +82,25 @@ function App() {
     }
   }, [accessToken]);
 
-  // OAuth未実装環境でも動く仮のログイン処理
+  // 【１】OAuth未実装環境でも動く仮のログイン処理（アカウント選択のシミュレートを追加）
   const simulateLogin = () => {
-    const dummyToken = 'mock_access_token_for_dev';
+    const userEmail = prompt('ログインするGoogleアカウント（メールアドレス）を入力、または選択してください:', 'user@gmail.com');
+    
+    // キャンセルされた場合は処理を中断
+    if (userEmail === null) return;
+
+    // 入力が空でなければ、選択されたアカウントとしてログイン処理を進める
+    const dummyToken = `mock_access_token_for_${userEmail || 'default'}`;
     setAccessToken(dummyToken);
     localStorage.setItem('google_access_token', dummyToken);
+    alert(`${userEmail || 'user@gmail.com'} としてログインしました。`);
   };
 
+  // 【２】ログアウト処理（確認ダイアログを追加）
   const logout = () => {
+    const confirmLogout = window.confirm('ログアウトしてよろしいですか？');
+    if (!confirmLogout) return;
+
     setAccessToken(null);
     localStorage.removeItem('google_access_token');
     setEvents(getMockEvents());
@@ -234,7 +245,6 @@ function App() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           {accessToken ? (
             <>
-              {/* 【１】更新ボタン：isSpinningがtrueの間だけ「spin」クラスを付与して1回転させます */}
               <button
                 className="btn btn-outline btn-sm"
                 onClick={refreshEvents}
