@@ -58,7 +58,7 @@ function App() {
     try {
       setIsLoading(true);
 
-      // ✅ 変数名のハイフンを修正しました (un-syncedEvents -> unSyncedEvents)
+      // 変数名のハイフンを修正しました (un-syncedEvents -> unSyncedEvents)
       const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
 
       if (unSyncedEvents.length > 0) {
@@ -94,8 +94,8 @@ function App() {
     if (accessToken) {
       setIsLoading(true);
       try {
-        const { id, ...eventWithoutId } = event; 
-        const savedGoogleEvent = await createGoogleEvent(accessToken, event as CalendarEvent);
+        // ✅ 未使用変数のエラー（TS6133）の原因だった分割代入を削除し、スッキリさせました
+        const savedGoogleEvent = await createGoogleEvent(accessToken, event);
         setEvents(prev => [...prev, savedGoogleEvent]);
         await refreshEvents();
       } catch (error) {
