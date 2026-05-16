@@ -1,16 +1,19 @@
+// src/App.tsx
 import { useState, useEffect, useCallback } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
 import { BatchEditor } from './components/BatchEditor';
 import { SettingsPanel } from './components/SettingsPanel';
-import type { CalendarEvent, BatchItem, TimeOption, EventStatus } from './types';
+import type { CalendarEvent, BatchItem, EventStatus } from './types';
 import type { TimeSettings } from './types/settings';
-import { loadSettings } from './types/settings';
-import { calculateEventTimeWithSettings } from './utils/settingsUtils';
-import { getMockEvents, addMockEvent, updateMockEvent, stringifyBatchMemo, consolidateWeeklyMemos, deleteMockEvent } from './utils/calendarUtils';
+import { loadSettings, saveSettings } from './types/settings';
+import { 
+  getMockEvents, addMockEvent, updateMockEvent, 
+  extractMemosFromSettingsRange, deleteMockEvent, consolidateWeeklyMemos
+} from './utils/calendarUtils';
 import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
-import { Calendar as CalendarIcon, Settings, LogIn, LogOut, RefreshCw, Layers } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
 
 function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -20,16 +23,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  const [daysBefore, setDaysBefore] = useState<number>(0);
-  const [daysAfter, setDaysAfter] = useState<number>(7);
-
-  const dayOptions = Array.from({ length: 16 }, (_, i) => i);
-
-  const calcTime = useCallback(
-    (option: TimeOption) => calculateEventTimeWithSettings(option, timeSettings),
-    [timeSettings]
-  );
-
+  // ── ログイン（App(11)方式：useGoogleLogin） ──────────────────────────────
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
       setAccessToken(tokenResponse.access_token);
@@ -39,6 +33,7 @@ function App() {
     onError: (error) => console.log('Login Failed:', error),
   });
 
+  // ── ログアウト（App(11)方式：確認ダイアログなし） ──────────────────────
   const logout = () => {
     setAccessToken(null);
     localStorage.removeItem('google_access_token');
@@ -51,29 +46,32 @@ function App() {
     else setEvents(getMockEvents());
   }, []);
 
+  // ── 双方向同期（App.tsxの構成 + App(11)の401自動ログアウト） ────────────
   const refreshEvents = useCallback(async () => {
     if (!accessToken) return;
+    setIsLoading(true);
+
     try {
-      setIsLoading(true);
-
+      // Step A: 未同期予定（evt- 仮ID）をGoogleへ書き出し
       const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
-
       if (unSyncedEvents.length > 0) {
-        console.log(`${unSyncedEvents.length}件の未同期予定をGoogleカレンダーに反映中...`);
+        console.log(`${unSyncedEvents.length}件の未同期データをGoogleカレンダーに保存中...`);
         for (const event of unSyncedEvents) {
           try {
             await createGoogleEvent(accessToken, event);
-          } catch (createError) {
-            console.error(`予定「${event.title}」の同期に失敗しました:`, createError);
+          } catch (err) {
+            console.error(`「${event.title}」の保存に失敗しました:`, err);
           }
         }
       }
 
+      // Step B: Googleから最新予定を取得して画面に反映
       const fetchedEvents = await fetchGoogleEvents(accessToken);
       setEvents(fetchedEvents);
 
     } catch (error) {
-      console.error('同期・更新処理に失敗しました', error);
+      console.error('同期処理中にエラーが発生しました:', error);
+      // 401エラー（トークン期限切れ）の場合は自動ログアウト
       if ((error as any).message?.includes('401')) logout();
     } finally {
       setIsLoading(false);
@@ -97,6 +95,20 @@ function App() {
     }
   }, [accessToken]);
 
+  // ── 設定 ──────────────────────────────────────────────────────────────────
+  const handleSaveSettings = (newSettings: TimeSettings) => {
+    setTimeSettings(newSettings);
+    saveSettings(newSettings);
+    setShowSettings(false);
+  };
+
+  // ── MEMOを編集（App.tsx固有機能） ────────────────────────────────────────
+  const handleMergeMemosClick = () => {
+    const extractedBatchEvent = extractMemosFromSettingsRange(events, timeSettings);
+    setSelectedEvent(extractedBatchEvent);
+  };
+
+  // ── クイックメモ保存 ──────────────────────────────────────────────────────
   const handleSaveSingle = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
@@ -105,7 +117,7 @@ function App() {
         setEvents(prev => [...prev, savedGoogleEvent]);
         await refreshEvents();
       } catch (error) {
-        console.error("Googleカレンダーへのクイックメモ保存に失敗しました:", error);
+        console.error('Googleカレンダーへのクイックメモ保存に失敗しました:', error);
         await refreshEvents();
       } finally {
         setIsLoading(false);
@@ -116,6 +128,7 @@ function App() {
     }
   };
 
+  // ── バッチ保存 ────────────────────────────────────────────────────────────
   const handleSaveBatch = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
@@ -143,14 +156,14 @@ function App() {
     }
   };
 
-  const handleCarryOver = async (items: BatchItem[], timeOption: TimeOption) => {
-    const { start, end } = calcTime(timeOption);
+  // ── 繰り越し ──────────────────────────────────────────────────────────────
+  const handleCarryOver = async (items: BatchItem[]) => {
     const newEvent: CalendarEvent = {
       id: `evt-${Date.now()}-carry`,
       title: '□ やること',
-      start,
-      end,
-      memo: stringifyBatchMemo(items),
+      start: new Date(),
+      end: new Date(),
+      memo: items.map(item => `${item.checked ? '☑' : '□'} ${item.text}`).join('\n'),
       status: 'unchecked',
       isBatch: true,
     };
@@ -170,15 +183,13 @@ function App() {
     }
   };
 
+  // ── 予定選択（チェック切り替え / バッチ編集） ─────────────────────────────
   const handleSelectEvent = async (event: CalendarEvent) => {
     if (event.isBatch) {
       setSelectedEvent(event);
     } else {
       const newStatus = (event.status === 'checked' ? 'unchecked' : 'checked') as EventStatus;
-      const newTitle =
-        newStatus === 'checked'
-          ? event.title.replace('□', '☑')
-          : event.title.replace('☑', '□');
+      const newTitle = newStatus === 'checked' ? event.title.replace('□', '☑') : event.title.replace('☑', '□');
       const updatedEvent = { ...event, status: newStatus, title: newTitle };
       if (accessToken && !event.id.startsWith('evt-')) {
         setIsLoading(true);
@@ -197,17 +208,18 @@ function App() {
     }
   };
 
+  // ── タスクをまとめる ──────────────────────────────────────────────────────
   const handleMergeWeeklyMemos = async () => {
-    const { mergedEvent, targetIds } = consolidateWeeklyMemos(events, daysBefore, daysAfter);
+    const before = timeSettings.mergeDaysBefore ?? 0;
+    const after = timeSettings.mergeDaysAfter ?? 7;
+    const { mergedEvent, targetIds } = consolidateWeeklyMemos(events, before, after);
 
     if (targetIds.length === 0) {
-      alert(`${daysBefore}日前から${daysAfter}日後までの期間に、統合対象となる未完了メモ（□）が見つかりませんでした。`);
+      alert('統合対象となる未完了メモが見つかりませんでした。');
       return;
     }
 
-    const confirmMerge = window.confirm(
-      `指定期間内に未完了メモが ${targetIds.length} 件見つかりました。\nこれらを削除し、本日21時の『□ MEMO』に1つにまとめますか？`
-    );
+    const confirmMerge = window.confirm(`未完了メモが ${targetIds.length} 件見つかりました。本日21時の『□ MEMO』に1つにまとめますか？`);
     if (!confirmMerge) return;
 
     setIsLoading(true);
@@ -215,9 +227,7 @@ function App() {
       if (accessToken) {
         for (const id of targetIds) {
           if (!id.startsWith('evt-')) {
-            await deleteGoogleEvent(accessToken, id).catch(err =>
-              console.error(`Failed to delete event ${id}:`, err)
-            );
+            await deleteGoogleEvent(accessToken, id).catch(err => console.error(err));
           }
         }
         await createGoogleEvent(accessToken, mergedEvent);
@@ -227,15 +237,16 @@ function App() {
         addMockEvent(mergedEvent);
         setEvents(getMockEvents());
       }
-      alert('指定期間の未完了タスクを本日の21時に集約しました！');
+      alert('タスクを本日の21時に集約しました！');
     } catch (error) {
-      console.error('Failed to merge memos:', error);
+      console.error(error);
       alert('統合処理中にエラーが発生しました。');
     } finally {
       setIsLoading(false);
     }
   };
 
+  // ── JSX ──────────────────────────────────────────────────────────────────
   return (
     <div className="app-container">
       <header className="app-header">
@@ -245,69 +256,37 @@ function App() {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem', background: 'var(--surface)', padding: '0.25rem 0.375rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-            <select 
-              value={daysBefore} 
-              onChange={(e) => setDaysBefore(Number(e.target.value))}
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '0.75rem', fontWeight: 'bold', outline: 'none', cursor: 'pointer' }}
-            >
-              {dayOptions.map(d => <option key={`before-${d}`} value={d}>{d}</option>)}
-            </select>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>前〜</span>
-            <select 
-              value={daysAfter} 
-              onChange={(e) => setDaysAfter(Number(e.target.value))}
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontSize: '0.75rem', fontWeight: 'bold', outline: 'none', cursor: 'pointer' }}
-            >
-              {dayOptions.map(d => <option key={`after-${d}`} value={d}>{d}</option>)}
-            </select>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>後</span>
-          </div>
-
           {accessToken ? (
             <>
               <button
                 className="btn btn-outline btn-sm"
-                onClick={handleMergeWeeklyMemos}
-                title={`${daysBefore}日前から${daysAfter}日後までのメモを本日21時に統合`}
-                style={{ padding: '0.4rem', color: 'var(--accent)', minHeight: '34px' }}
+                onClick={refreshEvents}
+                title="カレンダーを更新・同期"
+                style={{ padding: '0.4rem', minHeight: '34px' }}
                 disabled={isLoading}
               >
-                <Layers size={16} />
+                <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
               </button>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={refreshEvents}
-                title="更新"
-                style={{ padding: '0.4rem', minHeight: '34px' }}
+              <button 
+                className="btn btn-outline btn-sm" 
+                onClick={logout} 
+                title="Googleカレンダーからログアウト" 
+                style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
               >
-                {/* ✅ spinクラスの条件分岐を削除し、くるくる回らないよう修正しました */}
-                <RefreshCw size={16} />
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={logout}
-                title="ログアウト"
-                style={{ padding: '0.4rem', minHeight: '34px' }}
-              >
-                <LogOut size={16} />
+                <LogOut size={16} /> ログアウト
               </button>
             </>
           ) : (
-            <>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={handleMergeWeeklyMemos}
-                title="指定期間のメモを本日21時に統合 (テスト)"
-                style={{ padding: '0.4rem', color: 'var(--accent)', minHeight: '34px' }}
-              >
-                <Layers size={16} />
-              </button>
-              <button className="btn btn-primary btn-sm" onClick={() => login()} title="Googleログイン" style={{ minHeight: '34px', padding: '0.4rem 0.75rem' }}>
-                <LogIn size={14} /> ログイン
-              </button>
-            </>
+            <button 
+              className="btn btn-primary btn-sm" 
+              onClick={() => login()} 
+              title="Googleカレンダーにログイン・連携" 
+              style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
+            >
+              <LogIn size={14} /> ログイン
+            </button>
           )}
+
           <button
             className={`btn btn-outline btn-sm${showSettings ? ' btn-primary' : ''}`}
             style={{ padding: '0.4rem', minHeight: '34px' }}
@@ -323,15 +302,32 @@ function App() {
         <SettingsPanel
           initialSettings={timeSettings}
           onClose={() => setShowSettings(false)}
-          onSave={(settings) => {
-            setTimeSettings(settings);
-            setShowSettings(false);
-          }}
+          onSave={handleSaveSettings}
         />
       )}
 
       <div className="editors-section">
         <SingleEditor onSave={handleSaveSingle} />
+        
+        <div style={{ display: 'flex', gap: '1rem', width: '100%', margin: '0.5rem 0' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={handleMergeWeeklyMemos}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px' }}
+            disabled={isLoading}
+          >
+            <Layers size={18} /> タスクをまとめる
+          </button>
+
+          <button
+            className="btn btn-outline"
+            onClick={handleMergeMemosClick}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px', color: 'var(--accent)', borderColor: 'var(--accent)' }}
+          >
+            <Layers size={18} /> MEMOを編集
+          </button>
+        </div>
+
         <BatchEditor
           onSave={handleSaveBatch}
           onCarryOver={handleCarryOver}
