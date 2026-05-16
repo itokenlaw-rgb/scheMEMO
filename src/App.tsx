@@ -210,7 +210,7 @@ function App() {
 
   // ── タスクをまとめる ──────────────────────────────────────────────────────
   const handleMergeWeeklyMemos = async () => {
-    const before = timeSettings.mergeDaysBefore ?? 0;
+    const before = timeSettings.mergeDaysBefore ?? 7;
     const after = timeSettings.mergeDaysAfter ?? 7;
     const { mergedEvent, targetIds } = consolidateWeeklyMemos(events, before, after);
 
