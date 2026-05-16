@@ -313,16 +313,80 @@ body {
 }
 
 /* =====================
+   Calendar Resizable Wrapper
+   ===================== */
+.calendar-resizable-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* ── リサイズハンドル共通 ── */
+.calendar-resize-handle {
+  width: 100%;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: ns-resize;
+  user-select: none;
+  /* カレンダーカードの角丸に合わせる */
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  transition: background 0.15s;
+  touch-action: none;
+}
+
+.calendar-resize-handle--top {
+  border-top: 1px solid var(--border);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+}
+
+.calendar-resize-handle--bottom {
+  border-bottom: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+.calendar-resize-handle:hover,
+.calendar-resize-handle:active {
+  background: var(--primary-light);
+}
+
+/* グリップのドット3つ */
+.calendar-resize-handle__grip {
+  display: block;
+  width: 32px;
+  height: 4px;
+  border-radius: 2px;
+  background: repeating-linear-gradient(
+    to right,
+    var(--text-muted) 0px,
+    var(--text-muted) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+  opacity: 0.4;
+  transition: opacity 0.15s;
+}
+
+.calendar-resize-handle:hover .calendar-resize-handle__grip,
+.calendar-resize-handle:active .calendar-resize-handle__grip {
+  opacity: 0.9;
+}
+
+/* =====================
    Calendar Overrides
    ===================== */
 .rbc-calendar {
-  /* 【修正１】縦長に変更：420px → 580px で2行分の予定が見やすくなる */
-  height: 580px !important;
+  /* 高さはインラインスタイルで動的制御するため、ここでは background 等のみ */
   background: var(--surface);
-  border-radius: var(--radius-xl);
+  /* 上下のroundedをハンドルに任せるためcalendarのradiusは0 */
+  border-radius: 0;
   padding: 0.75rem;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border);
+  border-top: none;
+  border-bottom: none;
 }
 
 /* 各日セルの最小高さを確保して2行分のイベントが表示される */
@@ -371,12 +435,8 @@ body {
 }
 
 /* =====================
-   【修正２】イベントポップアップ
+   イベントポップアップ
    ===================== */
-
-/* カレンダーラッパーは position: relative（CalendarView.tsx側で設定済み） */
-
-/* 半透明オーバーレイ：カレンダー全体を覆う */
 .event-popup-overlay {
   position: absolute;
   inset: 0;
@@ -389,7 +449,6 @@ body {
   animation: fadeIn 0.15s ease-out;
 }
 
-/* ポップアップ本体 */
 .event-popup {
   position: relative;
   background: var(--surface);
@@ -403,7 +462,6 @@ body {
   animation: slideUp 0.18s ease-out;
 }
 
-/* ×ボタン */
 .event-popup-close {
   position: absolute;
   top: 0.5rem;
@@ -424,19 +482,17 @@ body {
   background: var(--surface-hover);
 }
 
-/* タイトル */
 .event-popup-title {
   font-size: 1rem;
   font-weight: 700;
   color: var(--text-main);
   margin-bottom: 0.75rem;
-  padding-right: 1.5rem; /* ×ボタンと重ならないよう */
+  padding-right: 1.5rem;
   line-height: 1.4;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-/* メモ本文 */
 .event-popup-memo {
   font-size: 0.875rem;
   color: var(--text-muted);
@@ -447,7 +503,6 @@ body {
   padding-top: 0.625rem;
 }
 
-/* 内容なし */
 .event-popup-empty {
   font-size: 0.8rem;
   color: var(--text-muted);
