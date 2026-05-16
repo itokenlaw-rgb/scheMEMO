@@ -2,17 +2,28 @@
 
 export type DayOfWeek = '月' | '火' | '水' | '木' | '金' | '土' | '日';
 
+export interface TodaySettings {
+  mode: 'relative' | 'fixed';
+  relativeMinutes: number;
+  fixedTime: string;
+}
+
+export interface TomorrowSettings {
+  mode: 'fixed';
+  fixedTime: string;
+}
+
 export interface TimeSettings {
-  today: { time: string };
-  tomorrow: { time: string };
-  tonight: { time: string };
-  tomorrowNight: { time: string };
-  weekend: { mode: 'fri_18' | 'sat_am'; time: string };
-  endOfMonth: { mode: 'fixed' | 'lastDay' | 'lastDow'; day: number; dow: DayOfWeek; time: string };
+  today: TodaySettings;
+  tomorrow: TomorrowSettings;
+  tonight: { fixedTime: string };
+  tomorrowNight: { fixedTime: string };
+  weekend: { dow: DayOfWeek; time: string };
+  endOfMonth: { mode: 'fixed' | 'lastDay' | 'lastDow'; day: number; dow: DayOfWeek };
   nextWeek: { dow: DayOfWeek; time: string };
   nextMonth: { day: number; time: string };
   
-  // 【新設項目】
+  // 抽出・統合・完了タスクの設定項目
   deletePastCompleted: boolean;     // 過去の完了タスクは削除する
   deleteFutureCompleted: boolean;   // 将来の完了タスクは削除する
   memoDaysBefore: number;           // □MEMO抽出範囲（〇日前）
@@ -22,16 +33,15 @@ export interface TimeSettings {
 }
 
 export const DEFAULT_TIME_SETTINGS: TimeSettings = {
-  today: { time: '11:00' },
-  tomorrow: { time: '11:00' },
-  tonight: { time: '20:00' },
-  tomorrowNight: { time: '20:00' },
-  weekend: { mode: 'fri_18', time: '18:00' },
-  endOfMonth: { mode: 'lastDay', day: 25, dow: '金', time: '11:00' },
+  today: { mode: 'relative', relativeMinutes: 60, fixedTime: '09:00' },
+  tomorrow: { mode: 'fixed', fixedTime: '09:00' },
+  tonight: { fixedTime: '20:00' },
+  tomorrowNight: { fixedTime: '20:00' },
+  weekend: { dow: '土', time: '12:00' },
+  endOfMonth: { mode: 'lastDay', day: 25, dow: '金' },
   nextWeek: { dow: '月', time: '09:00' },
   nextMonth: { day: 1, time: '09:00' },
   
-  // 初期値
   deletePastCompleted: false,
   deleteFutureCompleted: false,
   memoDaysBefore: 0,
