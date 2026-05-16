@@ -115,7 +115,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
           <div style={{ flex: 1, minWidth: '140px' }}>
             <Label>明日夜 (tomorrowNight)</Label>
-            <Sel value={s.tomorrowNight.fixedTime} onChange={v => patch('tomorrowNight', { fixedTime: v })}>
+            <Sel value={s.tomorrowNight.fixedTime} onChange => patch('tomorrowNight', { fixedTime: v })}>
               {NIGHT_HOURS.map(h => <option key={h} value={h}>{h}</option>)}
             </Sel>
           </div>
@@ -301,4 +301,47 @@ const Radio: React.FC<{
     gap: '0.25rem',
     cursor: 'pointer',
     fontSize: '0.875rem',
-    flexWrap: 'wrap
+    flexWrap: 'wrap',
+  }}>
+    <input
+      type="radio"
+      name={name}
+      value={value}
+      checked={checked}
+      onChange={onChange}
+      style={{ accentColor: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}
+    />
+    {children}
+  </label>
+);
+
+const Row: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.375rem' }}>
+    {children}
+  </div>
+);
+
+const Sel: React.FC<{
+  value: string;
+  onChange: (v: string) => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}> = ({ value, onChange, children, disabled }) => (
+  <select
+    value={value}
+    onChange={e => onChange(e.target.value)}
+    disabled={disabled}
+    style={{
+      background: 'var(--background)',
+      border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-sm)',
+      padding: '0.25rem 0.5rem',
+      fontSize: '0.85rem',
+      color: 'var(--text-main)',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      opacity: disabled ? 0.6 : 1,
+    }}
+  >
+    {children}
+  </select>
+);
