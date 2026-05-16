@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { CalendarEvent, TimeOption } from '../types';
 import { calculateEventTime } from '../utils/calendarUtils';
 import { Check, Save } from 'lucide-react';
@@ -21,9 +21,22 @@ const timeOptions: { value: TimeOption; label: string }[] = [
 ];
 
 export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime = 'today' }) => {
-  const [text, setText] = useState('□　');
+  const [text, setText] = useState('□');
   const [checked, setChecked] = useState(false);
   const [selectedTime, setSelectedTime] = useState<TimeOption>(defaultTime);
+  
+  // ✅ 入力欄を直接操作するための「参照（Ref）」を作成
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // ✅ 【オートフォーカス】画面を立ち上げた時に自動でカーソルを入力欄の「□」の直後に持っていく処理
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.focus();
+      // カーソル位置を文字の最後（3文字目: □＋全角スペースの後ろ）に指定
+      const length = inputRef.current.value.length;
+      inputRef.current.setSelectionRange(length, length);
+    }
+  }, []);
 
   const handleSave = () => {
     const trimmed = text.replace(/^[□☑]\s*/, '').trim();
@@ -43,14 +56,22 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
     };
     
     onSave(newEvent);
-    setText('□　');
+    setText('□');
     setChecked(false);
+
+    // 保存した後も、次をすぐ入力できるように自動でカーソルを戻す
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        const length = inputRef.current.value.length;
+        inputRef.current.setSelectionRange(length, length);
+      }
+    }, 50);
   };
 
   const handleCheckToggle = () => {
     const newChecked = !checked;
     setChecked(newChecked);
-    // 先頭の□/☑を切り替える
     const body = text.replace(/^[□☑]\s*/, '');
     setText(`${newChecked ? '☑' : '□'}　${body}`);
   };
@@ -67,7 +88,9 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
         >
           {checked && <Check size={16} />}
         </button>
+        {/* ✅ inputRef を設定して、プログラムから自動操作できるようにしました */}
         <input 
+          ref={inputRef}
           type="text" 
           className="text-input"
           placeholder="□やること"
