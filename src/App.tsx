@@ -1,5 +1,6 @@
 // src/App.tsx
 import { useState, useEffect, useCallback } from 'react';
+import { useGoogleLogin } from '@react-oauth/google';
 import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
 import { BatchEditor } from './components/BatchEditor';
@@ -12,7 +13,7 @@ import {
   extractMemosFromSettingsRange, deleteMockEvent, consolidateWeeklyMemos
 } from './utils/calendarUtils';
 import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
-import { Calendar as CalendarIcon, Settings, RefreshCw, Layers } from 'lucide-react';
+import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
 
 function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -60,6 +61,21 @@ function App() {
       loadFirstTime();
     }
   }, [accessToken]);
+
+  const login = useGoogleLogin({
+    onSuccess: (tokenResponse) => {
+      setAccessToken(tokenResponse.access_token);
+      localStorage.setItem('google_access_token', tokenResponse.access_token);
+    },
+    scope: 'https://www.googleapis.com/auth/calendar.events',
+    onError: (error) => console.log('Login Failed:', error),
+  });
+
+  const logout = () => {
+    setAccessToken(null);
+    localStorage.removeItem('google_access_token');
+    setEvents(getMockEvents());
+  };
 
   const handleSaveSettings = (newSettings: TimeSettings) => {
     setTimeSettings(newSettings);
@@ -139,7 +155,6 @@ function App() {
     if (event.isBatch) {
       setSelectedEvent(event);
     } else {
-      // ✅ 型を明確にするため、as EventStatus を追加して型不一致エラーを解消しました
       const newStatus = (event.status === 'checked' ? 'unchecked' : 'checked') as EventStatus;
       const newTitle = newStatus === 'checked' ? event.title.replace('□', '☑') : event.title.replace('☑', '□');
       const updatedEvent = { ...event, status: newStatus, title: newTitle };
@@ -199,35 +214,37 @@ function App() {
         </div>
         
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-          <button
-            className="btn btn-outline btn-sm"
-            onClick={handleMergeMemosClick}
-            title="カレンダーから設定範囲のメモを抽出して編集"
-            style={{ padding: '0.4rem', color: 'var(--accent)', minHeight: '34px' }}
-          >
-            <Layers size={16} /> まとめる
-          </button>
-
-          {accessToken && (
+          {/* 【２】上部にGoogleカレンダーログイン/ログアウトボタンを配置 */}
+          {accessToken ? (
             <>
               <button
                 className="btn btn-outline btn-sm"
-                onClick={handleMergeWeeklyMemos}
-                title="一括統合を実行"
-                style={{ padding: '0.4rem', minHeight: '34px' }}
-              >
-                一括統合
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
                 onClick={refreshEvents}
-                title="更新"
+                title="カレンダーを更新・同期"
                 style={{ padding: '0.4rem', minHeight: '34px' }}
               >
                 <RefreshCw size={16} />
               </button>
+              <button 
+                className="btn btn-outline btn-sm" 
+                onClick={logout} 
+                title="Googleカレンダーからログアウト" 
+                style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
+              >
+                <LogOut size={16} /> ログアウト
+              </button>
             </>
+          ) : (
+            <button 
+              className="btn btn-primary btn-sm" 
+              onClick={() => login()} 
+              title="Googleカレンダーにログイン・連携" 
+              style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
+            >
+              <LogIn size={14} /> ログイン
+            </button>
           )}
+
           <button
             className={`btn btn-outline btn-sm${showSettings ? ' btn-primary' : ''}`}
             style={{ padding: '0.4rem', minHeight: '34px' }}
@@ -248,7 +265,31 @@ function App() {
       )}
 
       <div className="editors-section">
+        {/* クイックメモ機能 */}
         <SingleEditor onSave={handleSaveSingle} />
+        
+        {/* 【１】クイックメモ機能とバッチ機能の間に横並びのボタンを配置 */}
+        <div style={{ display: 'flex', gap: '1rem', width: '100%', margin: '0.5rem 0' }}>
+          {/* 左側：タスクをまとめるボタン */}
+          <button
+            className="btn btn-secondary"
+            onClick={handleMergeWeeklyMemos}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px' }}
+          >
+            <Layers size={18} /> タスクをまとめる
+          </button>
+
+          {/* 右側：MEMOを編集ボタン */}
+          <button
+            className="btn btn-outline"
+            onClick={handleMergeMemosClick}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px', color: 'var(--accent)', borderColor: 'var(--accent)' }}
+          >
+            <Layers size={18} /> MEMOを編集
+          </button>
+        </div>
+
+        {/* バッチ機能 */}
         <BatchEditor
           onSave={handleSaveBatch}
           onCarryOver={handleCarryOver}
