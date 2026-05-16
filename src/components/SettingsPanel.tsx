@@ -115,7 +115,8 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </div>
           <div style={{ flex: 1, minWidth: '140px' }}>
             <Label>明日夜 (tomorrowNight)</Label>
-            <Sel value={s.tomorrowNight.fixedTime} onChange => patch('tomorrowNight', { fixedTime: v })}>
+            {/* ✅ 正しい引数とアロー構文 (v => ...) に修正しました */}
+            <Sel value={s.tomorrowNight.fixedTime} onChange={v => patch('tomorrowNight', { fixedTime: v })}>
               {NIGHT_HOURS.map(h => <option key={h} value={h}>{h}</option>)}
             </Sel>
           </div>
@@ -201,7 +202,7 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({
           </Row>
         </div>
 
-        {/* ★ 追加セクション：抽出・統合・完了タスクの挙動設定 */}
+        {/* 抽出・統合・完了タスクの挙動設定 */}
         <div style={{ marginTop: '0.5rem', paddingTop: '1rem', borderTop: '2px solid var(--border)' }}>
           <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.5rem' }}>
             抽出・統合・完了タスクの設定
