@@ -20,11 +20,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  // 〇日前・〇日後の設定ステートを追加 (初期設定: 0日前から 7日後まで)
   const [daysBefore, setDaysBefore] = useState<number>(0);
   const [daysAfter, setDaysAfter] = useState<number>(7);
 
-  // 0 から 15 までの配列を作成
   const dayOptions = Array.from({ length: 16 }, (_, i) => i);
 
   const calcTime = useCallback(
@@ -58,13 +56,10 @@ function App() {
     try {
       setIsLoading(true);
 
-      // 変数名のハイフンを修正しました (un-syncedEvents -> unSyncedEvents)
       const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
 
       if (unSyncedEvents.length > 0) {
         console.log(`${unSyncedEvents.length}件の未同期予定をGoogleカレンダーに反映中...`);
-        
-        // 未同期の予定を1件ずつGoogleカレンダーAPIに送信して登録
         for (const event of unSyncedEvents) {
           try {
             await createGoogleEvent(accessToken, event);
@@ -74,7 +69,6 @@ function App() {
         }
       }
 
-      // 2. すべての書き出しが終わったら、Googleカレンダーから最新状態をまとめて再取得して画面を更新
       const fetchedEvents = await fetchGoogleEvents(accessToken);
       setEvents(fetchedEvents);
 
@@ -84,17 +78,29 @@ function App() {
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, events]); // events に依存するため依存配列に追加
+  }, [accessToken, events]);
 
   useEffect(() => {
-    if (accessToken) refreshEvents();
-  }, [accessToken, refreshEvents]);
+    if (accessToken) {
+      const loadFirstTime = async () => {
+        try {
+          setIsLoading(true);
+          const fetchedEvents = await fetchGoogleEvents(accessToken);
+          setEvents(fetchedEvents);
+        } catch (error) {
+          console.error('初回イベント取得に失敗しました', error);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadFirstTime();
+    }
+  }, [accessToken]);
 
   const handleSaveSingle = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
       try {
-        // ✅ 未使用変数のエラー（TS6133）の原因だった分割代入を削除し、スッキリさせました
         const savedGoogleEvent = await createGoogleEvent(accessToken, event);
         setEvents(prev => [...prev, savedGoogleEvent]);
         await refreshEvents();
@@ -191,7 +197,6 @@ function App() {
     }
   };
 
-  // メモ一括統合の実行処理 (設定されたステートを渡す)
   const handleMergeWeeklyMemos = async () => {
     const { mergedEvent, targetIds } = consolidateWeeklyMemos(events, daysBefore, daysAfter);
 
@@ -239,7 +244,6 @@ function App() {
           scheMEMO
         </div>
         
-        {/* プルダウンメニューと統合用のアクションエリア */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.15rem', background: 'var(--surface)', padding: '0.25rem 0.375rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
             <select 
@@ -277,7 +281,8 @@ function App() {
                 title="更新"
                 style={{ padding: '0.4rem', minHeight: '34px' }}
               >
-                <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
+                {/* ✅ spinクラスの条件分岐を削除し、くるくる回らないよう修正しました */}
+                <RefreshCw size={16} />
               </button>
               <button
                 className="btn btn-outline btn-sm"

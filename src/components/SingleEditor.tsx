@@ -1,119 +1,122 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { CalendarEvent, TimeOption } from '../types';
 import { calculateEventTime } from '../utils/calendarUtils';
-import { Check, Save } from 'lucide-react';
-import clsx from 'clsx';
+import { Save } from 'lucide-react';
 
 interface SingleEditorProps {
   onSave: (event: CalendarEvent) => void;
   defaultTime?: TimeOption;
 }
 
-const timeOptions: { value: TimeOption; label: string }[] = [
-  { value: 'today', label: '今日中' },
-  { value: 'tomorrow', label: '明日中' },
-  { value: 'weekend', label: '週末' },
-  { value: 'endOfMonth', label: '月末' },
-  { value: 'tonight', label: '今日夜' },
-  { value: 'tomorrowNight', label: '明日夜' },
-  { value: 'nextWeek', label: '来週' },
-  { value: 'nextMonth', label: '来月' },
-];
-
 export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime = 'today' }) => {
-  const [text, setText] = useState('□');
-  const [checked, setChecked] = useState(false);
-  const [selectedTime, setSelectedTime] = useState<TimeOption>(defaultTime);
+  // 【２】3つの入力欄の状態を個別に管理
+  const [text1, setText1] = useState('□');
+  const [text2, setText2] = useState('□');
+  const [text3, setText3] = useState('□');
   
-  // ✅ 入力欄を直接操作するための「参照（Ref）」を作成
-  const inputRef = useRef<HTMLInputElement>(null);
+  // 【４】将来的な利用や裏側の時間設定保持のため、selectedTime の状態は内部的に残します
+  const [selectedTime] = useState<TimeOption>(defaultTime);
+  
+  // 最初の入力欄へのオートフォーカス用Ref
+  const inputRef1 = useRef<HTMLInputElement>(null);
 
-  // ✅ 【オートフォーカス】画面を立ち上げた時に自動でカーソルを入力欄の「□」の直後に持っていく処理
+  // 画面起動時に「□」の直後にカーソルを当てる
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.focus();
-      // カーソル位置を文字の最後（3文字目: □＋全角スペースの後ろ）に指定
-      const length = inputRef.current.value.length;
-      inputRef.current.setSelectionRange(length, length);
+    if (inputRef1.current) {
+      inputRef1.current.focus();
+      const length = inputRef1.current.value.length;
+      inputRef1.current.setSelectionRange(length, length);
     }
   }, []);
 
-  const handleSave = () => {
+  // 各入力欄ごとの保存処理
+  const handleSaveField = (
+    text: string, 
+    setText: React.Dispatch<React.SetStateAction<string>>, 
+    inputRef?: React.RefObject<HTMLInputElement | null>
+  ) => {
     const trimmed = text.replace(/^[□☑]\s*/, '').trim();
     if (!trimmed) return;
     
     const { start, end } = calculateEventTime(selectedTime);
-    const prefix = checked ? '☑' : '□';
     
     const newEvent: CalendarEvent = {
-      id: `evt-${Date.now()}`,
-      title: `${prefix} ${trimmed}`,
+      id: `evt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      title: `□ ${trimmed}`,
       start,
       end,
       memo: '',
-      status: checked ? 'checked' : 'unchecked',
+      status: 'unchecked',
       isBatch: false
     };
     
     onSave(newEvent);
-    setText('□');
-    setChecked(false);
+    setText('□'); // 保存後に「□」に戻す
 
-    // 保存した後も、次をすぐ入力できるように自動でカーソルを戻す
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.focus();
-        const length = inputRef.current.value.length;
-        inputRef.current.setSelectionRange(length, length);
-      }
-    }, 50);
-  };
-
-  const handleCheckToggle = () => {
-    const newChecked = !checked;
-    setChecked(newChecked);
-    const body = text.replace(/^[□☑]\s*/, '');
-    setText(`${newChecked ? '☑' : '□'}　${body}`);
+    // 保存後に同じ場所へフォーカスを当て直す
+    if (inputRef && inputRef.current) {
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.focus();
+          const length = inputRef.current.value.length;
+          inputRef.current.setSelectionRange(length, length);
+        }
+      }, 50);
+    }
   };
 
   return (
-    <div className="card single-editor">
-      <h2 className="card-title">クイックメモ</h2>
+    <div className="card single-editor" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+      <h2 className="card-title" style={{ marginBottom: '0.25rem' }}>クイックメモ</h2>
 
-      <div className="input-group">
-        <button 
-          className={clsx('checkbox-btn', checked && 'checked')}
-          onClick={handleCheckToggle}
-          title="実行済にする"
-        >
-          {checked && <Check size={16} />}
-        </button>
-        {/* ✅ inputRef を設定して、プログラムから自動操作できるようにしました */}
+      {/* 入力欄 1 */}
+      <div className="input-group" style={{ marginBottom: 0 }}>
+        {/* 【３】左側のチェックボックス用ボタンを削除しました */}
         <input 
-          ref={inputRef}
+          ref={inputRef1}
           type="text" 
           className="text-input"
-          placeholder="□やること"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSave()}
+          placeholder="□やること 1"
+          value={text1}
+          onChange={(e) => setText1(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSaveField(text1, setText1, inputRef1)}
         />
-        <button className="btn btn-primary" onClick={handleSave}>
+        <button className="btn btn-primary" onClick={() => handleSaveField(text1, setText1, inputRef1)}>
           <Save size={18} /> 保存
         </button>
       </div>
 
-      <div className="time-grid">
-        {timeOptions.map(opt => (
-          <button
-            key={opt.value}
-            className={clsx('time-btn', selectedTime === opt.value && 'active')}
-            onClick={() => setSelectedTime(opt.value)}
-          >
-            {opt.label}
-          </button>
-        ))}
+      {/* 入力欄 2 */}
+      <div className="input-group" style={{ marginBottom: 0 }}>
+        <input 
+          type="text" 
+          className="text-input"
+          placeholder="□やること 2"
+          value={text2}
+          onChange={(e) => setText2(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSaveField(text2, setText2)}
+        />
+        <button className="btn btn-primary" onClick={() => handleSaveField(text2, setText2)}>
+          <Save size={18} /> 保存
+        </button>
       </div>
+
+      {/* 入力欄 3 */}
+      <div className="input-group" style={{ marginBottom: 0 }}>
+        <input 
+          type="text" 
+          className="text-input"
+          placeholder="□やること 3"
+          value={text3}
+          onChange={(e) => setText3(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSaveField(text3, setText3)}
+        />
+        <button className="btn btn-primary" onClick={() => handleSaveField(text3, setText3)}>
+          <Save size={18} /> 保存
+        </button>
+      </div>
+
+      {/* 【４】下部にあった time-grid（今日中などのボタン表示）を丸ごと削除しました */}
     </div>
   );
 };
