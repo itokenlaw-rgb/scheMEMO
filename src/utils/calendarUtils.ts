@@ -1,7 +1,6 @@
 // src/utils/calendarUtils.ts
-import { addHours, addDays, subDays, nextFriday, endOfMonth, setHours, setMinutes, startOfDay, endOfDay, addWeeks, addMonths, isAfter, isBefore } from 'date-fns';
+import { addHours, addDays, subDays, nextFriday, endOfMonth, setHours, setMinutes, startOfDay, endOfDay, addWeeks, addMonths } from 'date-fns';
 import type { TimeOption, CalendarEvent, BatchItem, EventStatus } from '../types';
-import type { TimeSettings } from '../types/settings';
 
 export const calculateEventTime = (option: TimeOption, baseDate: Date = new Date()): { start: Date, end: Date } => {
   let start = new Date(baseDate);
@@ -26,9 +25,12 @@ export const calculateEventTime = (option: TimeOption, baseDate: Date = new Date
       break;
     case 'weekend':
       start = nextFriday(startOfDay(start));
-      start = setHours(setMinutes(start, 0), 18);\n      break;
+      start = setHours(setMinutes(start, 0), 18);
+      break;
     case 'endOfMonth':
-      start = endOfMonth(start);\n      start = setHours(setMinutes(start, 0), 18);\n      break;
+      start = endOfMonth(start);
+      start = setHours(setMinutes(start, 0), 18);
+      break;
     case 'nextWeek':
       start = addWeeks(start, 1);
       break;
@@ -74,11 +76,11 @@ export const getBatchTitlePrefix = (status: EventStatus): string => {
   }
 };
 
-export const extractMemosFromSettingsRange = (events: CalendarEvent[], _settings: TimeSettings): CalendarEvent[] => {
+export const extractMemosFromSettingsRange = (events: CalendarEvent[], _settings: any): CalendarEvent[] => {
   return events.filter(e => e.isBatch);
 };
 
-export const consolidateWeeklyMemos = (events: CalendarEvent[]): { mergedEvent: CalendarEvent; targetIds: string[] } => {
+export const consolidateWeeklyMemos = (events: CalendarEvent[], _before?: number, _after?: number): { mergedEvent: CalendarEvent; targetIds: string[] } => {
   const targetIds: string[] = [];
   const combinedItems: BatchItem[] = [];
 
@@ -133,7 +135,7 @@ export const consolidateWeeklyMemos = (events: CalendarEvent[]): { mergedEvent: 
     end,
     memo: stringifyBatchMemo(uniqueItems),
     status: 'unchecked',
-    isBatch: true // 💡 確実にバッチフラグを立てる
+    isBatch: true
   };
 
   return { mergedEvent, targetIds };
