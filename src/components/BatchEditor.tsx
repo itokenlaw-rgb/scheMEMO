@@ -1,3 +1,4 @@
+// src/components/BatchEditor.tsx
 import React, { useState, useEffect } from 'react';
 import type { CalendarEvent, TimeOption, BatchItem } from '../types';
 import { 
@@ -34,9 +35,9 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   const [carryOverTime, setCarryOverTime] = useState<TimeOption>('tomorrow');
   const [memoTitle, setMemoTitle] = useState('□MEMO');
 
-  // ── カレンダー選択時にデータを展開・整形するエフェクト ──────────────────
   useEffect(() => {
-    if (initialEvent && initialEvent.isBatch) {
+    // 💡 initialEventが存在し、バッチ予定、またはタイトルにMEMOを含む場合に抽出
+    if (initialEvent && (initialEvent.isBatch || initialEvent.title.toUpperCase().includes('MEMO'))) {
       setMemoTitle(initialEvent.title);
 
       const memo = initialEvent.memo ?? '';
@@ -45,18 +46,16 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       if (lines.length > 0) {
         const extractedItems: BatchItem[] = lines.map((line: string, i: number) => {
           const checked = /^☑/.test(line);
-          // 先頭の記号を除去して純粋なテキストにする
-          const cleanText = line.replace(/^[□☑]\s*/, '').trim();
+          const cleanText = line.replace(/^[□☑△]\s*/, '').trim();
           
           return {
             id: `item-${Date.now()}-${i}`,
-            // 入力欄のフォーマットを「□　内容」または「☑　内容」に統一して1行ずつ流し込む
             text: `${checked ? '☑' : '□'}　${cleanText}`,
             checked,
           };
         });
 
-        // 抽出した予定が元の入力欄目安（3つ以上）で埋まってしまった場合のみ、空枠を3つ追加する
+        // 抽出枠数が3つ以上（埋まった状態）であれば空欄を3つ足す
         if (extractedItems.length >= 3) {
           const emptyItems: BatchItem[] = Array(3).fill(null).map((_: null, i: number) => ({
             id: `item-${Date.now()}-empty-${i}`,
@@ -65,11 +64,21 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           }));
           setItems([...extractedItems, ...emptyItems]);
         } else {
-          // 3つ未満のときはそのままセット
-          setItems(extractedItems);
+          // 3つ未満の場合は、足りない分を補って合計3枠以上にするか、そのままセット
+          const deficit = 3 - extractedItems.length;
+          const emptyItems: BatchItem[] = Array(deficit).fill(null).map((_: null, i: number) => ({
+            id: `item-${Date.now()}-empty-${i}`,
+            text: '□　',
+            checked: false,
+          }));
+          setItems([...extractedItems, ...emptyItems]);
         }
       } else {
-        setItems(parseBatchMemo(memo));
+        setItems([
+          { id: `item-1`, text: '□　', checked: false },
+          { id: `item-2`, text: '□　', checked: false },
+          { id: `item-3`, text: '□　', checked: false },
+        ]);
       }
     } else {
       setMemoTitle('□MEMO');
@@ -81,13 +90,23 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     }
   }, [initialEvent]);
 
-  // ── ハンドラ関数群 ──────────────────────────────────────────────────
   const handleTextChange = (id: string, text: string) => {
     setItems(items.map(item => item.id === id ? { ...item, text } : item));
   };
 
   const toggleCheck = (id: string) => {
-    setItems(items.map(item => item.id === id ? { ...item, checked: !item.checked } : item));
+    setItems(items.map(item => {
+      if (item.id === id) {
+        const nextChecked = !item.checked;
+        const cleanText = item.text.replace(/^[□☑]\s*/, '').trim();
+        return {
+          ...item,
+          checked: nextChecked,
+          text: `${nextChecked ? '☑' : '□'}　${cleanText}`
+        };
+      }
+      return item;
+    }));
   };
 
   const addItems = () => {
@@ -100,7 +119,10 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   };
 
   const checkAll = () => {
-    setItems(items.map(item => ({ ...item, checked: true })));
+    setItems(items.map(item => {
+      const cleanText = item.text.replace(/^[□☑]\s*/, '').trim();
+      return { ...item, checked: true, text: `☑　${cleanText}` };
+    }));
   };
 
   const deleteItem = (id: string) => {
@@ -121,29 +143,23 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     })));
 
     if (initialEvent) {
-      onSave({ ...initialEvent, title, memo, status });
+      onSave({ ...initialEvent, title, memo, status, isBatch: true });
     } else {
       const { start, end } = calculateEventTime(selectedTime);
       onSave({ id: `evt-${Date.now()}`, title, start, end, memo, status, isBatch: true });
     }
     setMemoTitle('□MEMO');
-    setItems([
-      { id: `item-${Date.now()}-1`, text: '□　', checked: false },
-      { id: `item-${Date.now()}-2`, text: '□　', checked: false },
-      { id: `item-${Date.now()}-3`, text: '□　', checked: false },
-    ]);
     onClose();
   };
 
   const handleCarryOver = () => {
-    const uncheckedItems = items.filter(i => !i.checked && i.text.trim() !== '');
+    const uncheckedItems = items.filter(i => !i.checked && i.text.replace(/^[□☑]\s*/, '').trim() !== '');
     if (uncheckedItems.length > 0) {
       onCarryOver(uncheckedItems, carryOverTime);
     }
     handleSave();
   };
 
-  // ── 描画 ────────────────────────────────────────────────────────────
   return (
     <div className="card batch-editor">
       <div className="card-title" style={{ gap: '0.5rem' }}>

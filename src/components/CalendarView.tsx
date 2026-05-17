@@ -1,5 +1,4 @@
 // src/components/CalendarView.tsx
-
 import React, { useState, useRef, useCallback } from 'react';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
@@ -16,8 +15,6 @@ const localizer = dateFnsLocalizer({
   getDay,
   locales,
 });
-
-// 💡 【修正】エラーの原因だった「isMemoEvent」の未読宣言を削除しました。
 
 interface CalendarViewProps {
   events: CalendarEvent[];
@@ -51,7 +48,6 @@ const EventPopup: React.FC<EventPopupProps> = ({ event, onClose }) => (
   </div>
 );
 
-// ── ドラッグハンドル ──────────────────────────────────────────────────────
 interface DragHandleProps {
   position: 'top' | 'bottom';
   onDrag: (deltaY: number) => void;
@@ -81,41 +77,14 @@ const DragHandle: React.FC<DragHandleProps> = ({ position, onDrag }) => {
     window.addEventListener('mouseup', onUp);
   }, [position, onDrag]);
 
-  const onTouchStart = useCallback((e: React.TouchEvent) => {
-    dragging.current = true;
-    lastY.current = e.touches[0].clientY;
-
-    const onMove = (ev: TouchEvent) => {
-      if (!dragging.current) return;
-      const delta = ev.touches[0].clientY - lastY.current;
-      lastY.current = ev.touches[0].clientY;
-      onDrag(position === 'top' ? -delta : delta);
-    };
-    const onEnd = () => {
-      dragging.current = false;
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onEnd);
-    };
-    window.addEventListener('touchmove', onMove, { passive: true });
-    window.addEventListener('touchend', onEnd);
-  }, [position, onDrag]);
-
   return (
-    <div
-      className={`calendar-resize-handle calendar-resize-handle--${position}`}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchStart}
-      title="ドラッグしてカレンダーの高さを変更"
-    >
-      <span className="calendar-resize-handle__grip" />
-    </div>
+    <div className="calendar-resize-handle" onMouseDown={onMouseDown} />
   );
 };
 
-// ── CalendarView 本体 ──────────────────────────────────────────────────────
 const MIN_HEIGHT = 300;
 const MAX_HEIGHT = 900;
-const DEFAULT_HEIGHT = 580;
+const DEFAULT_HEIGHT = 650; // 💡 縦長表示（全体的に大きく）
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEvent }) => {
   const [calHeight, setCalHeight] = useState(DEFAULT_HEIGHT);
@@ -126,22 +95,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   }, []);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // 💡 【修正】「□MEMO」等から始まるisBatchイベントかどうか厳密に判定してエディタを連動
-    const isMemo = event.isBatch && event.title.replace(/^[□☑△]\s*/, '').toUpperCase().startsWith('MEMO');
+    // 💡 タイトルに MEMO が含まれるか、または isBatch 属性があるものを一括管理対象とする
+    const isMemo = event.isBatch || (event.title && event.title.toUpperCase().includes('MEMO'));
     
     if (isMemo) {
-      setPopupEvent(event);
-      onSelectEvent(event); // BatchEditorを呼び出す
+      setPopupEvent(event);   // 前面ポップアップ表示
+      onSelectEvent(event);   // BatchEditorへ抽出連動
       return;
     }
-    // 通常イベントやそれ以外の予定：ポップアップ表示のみ行う
+    
     setPopupEvent(event);
   }, [onSelectEvent]);
 
   return (
     <div className="calendar-resizable-wrapper">
       <DragHandle position="top" onDrag={handleDrag} />
-
       <Calendar
         localizer={localizer}
         events={events}
@@ -173,7 +141,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
           noEventsInRange: 'この期間に予定はありません。',
         }}
       />
-
       <DragHandle position="bottom" onDrag={handleDrag} />
 
       {popupEvent && (

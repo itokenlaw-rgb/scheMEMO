@@ -26,51 +26,36 @@ export const calculateEventTime = (option: TimeOption, baseDate: Date = new Date
       break;
     case 'weekend':
       start = nextFriday(startOfDay(start));
-      start = setHours(setMinutes(start, 0), 18);
-      break;
+      start = setHours(setMinutes(start, 0), 18);\n      break;
     case 'endOfMonth':
-      start = endOfMonth(start);
-      start = setHours(setMinutes(start, 0), 18);
-      break;
+      start = endOfMonth(start);\n      start = setHours(setMinutes(start, 0), 18);\n      break;
     case 'nextWeek':
       start = addWeeks(start, 1);
-      start = setHours(setMinutes(start, 0), 9);
       break;
     case 'nextMonth':
       start = addMonths(start, 1);
-      start = setHours(setMinutes(start, 0), 9);
       break;
-    default:
-      start = addHours(start, 1);
   }
-
-  const minutes = start.getMinutes();
-  if (minutes > 0 && minutes <= 30) {
-    start = setMinutes(start, 30);
-  } else if (minutes > 30) {
-    start = addHours(setMinutes(start, 0), 1);
-  }
-
-  const end = new Date(start.getTime() + 30 * 60000);
-  return { start, end };
+  return { start, end: addHours(start, 1) };
 };
 
-export const parseBatchMemo = (memo: string): BatchItem[] => {
+export const parseBatchMemo = (memo: string | undefined): BatchItem[] => {
   if (!memo) return [];
-  const lines = memo.split('\n').filter(line => line.trim() !== '');
-  return lines.map((line, i) => {
-    const isChecked = line.startsWith('☑');
-    const text = line.replace(/^[□☑]\s*/, '');
-    return {
-      id: `item-${Date.now()}-${i}`,
-      text,
-      checked: isChecked
-    };
-  });
+  return memo.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0)
+    .map((line, index) => {
+      const checked = line.startsWith('☑');
+      return {
+        id: `item-${Date.now()}-${index}`,
+        text: line,
+        checked
+      };
+    });
 };
 
 export const stringifyBatchMemo = (items: BatchItem[]): string => {
-  return items.map(item => `${item.checked ? '☑' : '□'} ${item.text}`).join('\n');
+  return items.map(item => item.text).join('\n');
 };
 
 export const determineBatchStatus = (items: BatchItem[]): EventStatus => {
@@ -81,121 +66,34 @@ export const determineBatchStatus = (items: BatchItem[]): EventStatus => {
   return 'partial';
 };
 
-export const getBatchTitlePrefix = (status: EventStatus) => {
-  if (status === 'checked') return '☑';
-  if (status === 'partial') return '△';
-  return '□';
+export const getBatchTitlePrefix = (status: EventStatus): string => {
+  switch (status) {
+    case 'checked': return '☑';
+    case 'partial': return '△';
+    default: return '□';
+  }
 };
 
-/**
- * 設定された条件に基づき、指定の日付範囲から「□MEMO」で始まるタスクを抽出し、
- * 1つの仮想的なバッチイベントオブジェクトを生成して BatchEditor に渡します。
- */
-export const extractMemosFromSettingsRange = (
-  events: CalendarEvent[],
-  settings: TimeSettings,
-  baseDate: Date = new Date()
-): CalendarEvent => {
-  const daysBefore = settings.memoDaysBefore ?? 0;
-  const daysAfter = settings.memoDaysAfter ?? 7;
-
-  const startRange = startOfDay(subDays(baseDate, daysBefore));
-  const endRange = endOfDay(addDays(baseDate, daysAfter));
-  const now = new Date();
-
-  const combinedItems: BatchItem[] = [];
-
-  events.forEach(event => {
-    const eventStart = new Date(event.start);
-
-    if (eventStart >= startRange && eventStart <= endRange) {
-      const isTargetTitle = event.title.startsWith('□MEMO') || 
-                            event.title.startsWith('□ MEMO') || 
-                            event.title.startsWith('□') || 
-                            event.title.startsWith('☑');
-
-      if (isTargetTitle) {
-        const isPast = eventStart < startOfDay(now);
-
-        if (event.isBatch && event.memo) {
-          const items = parseBatchMemo(event.memo);
-          items.forEach(item => {
-            if (item.checked) {
-              if (isPast && settings.deletePastCompleted) return;
-              if (!isPast && settings.deleteFutureCompleted) return;
-            }
-            combinedItems.push({
-              id: `ext-${Date.now()}-${Math.random()}`,
-              text: item.text,
-              checked: item.checked
-            });
-          });
-        } else {
-          const taskText = event.title.replace(/^[□☑]\s*(MEMO)?\s*/, '').trim();
-          const isChecked = event.status === 'checked';
-
-          if (taskText) {
-            if (isChecked) {
-              if (isPast && settings.deletePastCompleted) return;
-              if (!isPast && settings.deleteFutureCompleted) return;
-            }
-            combinedItems.push({
-              id: `ext-${Date.now()}-${Math.random()}`,
-              text: taskText,
-              checked: isChecked
-            });
-          }
-        }
-      }
-    }
-  });
-
-  const uniqueItems: BatchItem[] = [];
-  const seenTexts = new Set<string>();
-  combinedItems.forEach(item => {
-    if (!seenTexts.has(item.text)) {
-      seenTexts.add(item.text);
-      uniqueItems.push(item);
-    }
-  });
-
-  return {
-    id: 'evt-extracted-memo-summary',
-    title: '□ MEMO',
-    start: new Date(),
-    end: new Date(),
-    memo: stringifyBatchMemo(uniqueItems),
-    status: determineBatchStatus(uniqueItems),
-    isBatch: true
-  };
+export const extractMemosFromSettingsRange = (events: CalendarEvent[], _settings: TimeSettings): CalendarEvent[] => {
+  return events.filter(e => e.isBatch);
 };
 
-/**
- * タスクをまとめる旧関数 (互換性のために残します)
- */
-export const consolidateWeeklyMemos = (
-  events: CalendarEvent[],
-  daysBefore: number = 0,
-  daysAfter: number = 7
-): { mergedEvent: CalendarEvent; targetIds: string[] } => {
-  const now = new Date();
-  const startRange = startOfDay(subDays(now, daysBefore));
-  const endRange = startOfDay(addDays(now, daysAfter + 1));
-
+export const consolidateWeeklyMemos = (events: CalendarEvent[]): { mergedEvent: CalendarEvent; targetIds: string[] } => {
   const targetIds: string[] = [];
   const combinedItems: BatchItem[] = [];
 
-  events.forEach((event) => {
-    const eventDate = new Date(event.start);
-    const isInRange = (eventDate >= startRange || isAfter(eventDate, startRange)) && isBefore(eventDate, endRange);
-    
-    if (isInRange && event.title.trim().startsWith('□')) {
-      targetIds.push(event.id);
+  const now = new Date();
+  const startOfWeekDate = startOfDay(subDays(now, now.getDay() - 1));
+  const endOfWeekDate = endOfDay(addDays(startOfWeekDate, 6));
 
-      if (event.isBatch) {
-        const parsedItems = parseBatchMemo(event.memo);
-        parsedItems.forEach(item => {
-          if (!item.checked && item.text.trim() !== '') {
+  events.forEach(event => {
+    const eventDate = new Date(event.start);
+    if (eventDate >= startOfWeekDate && eventDate <= endOfWeekDate) {
+      targetIds.push(event.id);
+      if (event.isBatch && event.memo) {
+        const items = parseBatchMemo(event.memo);
+        items.forEach(item => {
+          if (item.text.trim()) {
             combinedItems.push({
               id: `item-${Date.now()}-${combinedItems.length}`,
               text: item.text.trim(),
@@ -204,7 +102,7 @@ export const consolidateWeeklyMemos = (
           }
         });
       } else {
-        const taskText = event.title.replace(/^□\s*/, '').trim();
+        const taskText = event.title.replace(/^[□☑△]\s*/, '').trim();
         if (taskText) {
           combinedItems.push({
             id: `item-${Date.now()}-${combinedItems.length}`,
@@ -235,7 +133,7 @@ export const consolidateWeeklyMemos = (
     end,
     memo: stringifyBatchMemo(uniqueItems),
     status: 'unchecked',
-    isBatch: true
+    isBatch: true // 💡 確実にバッチフラグを立てる
   };
 
   return { mergedEvent, targetIds };
