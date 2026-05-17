@@ -1,10 +1,7 @@
 // src/components/BatchEditor.tsx
 import React, { useState, useEffect, useRef } from 'react';
 import type { CalendarEvent, TimeOption, BatchItem } from '../types';
-import { 
-import { 
-  stringifyBatchMemo 
-} from '../utils/calendarUtils';} from '../utils/calendarUtils';
+import { stringifyBatchMemo } from '../utils/calendarUtils';
 import { Check, Save, Plus, ArrowRight, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
