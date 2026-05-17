@@ -37,7 +37,35 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   useEffect(() => {
     if (initialEvent && initialEvent.isBatch) {
       setMemoTitle(initialEvent.title);
-      setItems(parseBatchMemo(initialEvent.memo));
+
+      // memoを改行で分割して1行ずつ入力欄に展開する
+      const memo = initialEvent.memo ?? '';
+      const lines = memo.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== '');
+
+      if (lines.length > 0) {
+        const extractedItems: BatchItem[] = lines.map((line: string, i: number) => {
+          const checked = /^☑/.test(line);
+          // 先頭の □/☑ と直後の空白を除いたテキスト本文
+          const text = line.replace(/^[□☑]\s*/, '').trim();
+          return {
+            id: `item-${Date.now()}-${i}`,
+            text: `${checked ? '☑' : '□'}　${text}`,
+            checked,
+          };
+        });
+
+        // 末尾に空欄を3つ追加
+        const emptyItems: BatchItem[] = Array(3).fill(null).map((_: null, i: number) => ({
+          id: `item-${Date.now()}-empty-${i}`,
+          text: '□　',
+          checked: false,
+        }));
+
+        setItems([...extractedItems, ...emptyItems]);
+      } else {
+        // memoが空の場合は通常の parseBatchMemo にフォールバック
+        setItems(parseBatchMemo(memo));
+      }
     } else {
       setMemoTitle('□MEMO');
       setItems([

@@ -127,12 +127,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   }, []);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // □MEMOはポップアップなしで BatchEditor を直接開く
-    if (isMemoEvent(event)) {
-      onSelectEvent(event);
-      return;
-    }
-    // その他の isBatch：ポップアップ表示 + BatchEditor を開く
+    // isBatch（□MEMOを含む）：ポップアップ表示 + BatchEditor を開く
     if (event.isBatch) {
       setPopupEvent(event);
       onSelectEvent(event);
