@@ -1,5 +1,3 @@
-// src/components/CalendarView.tsx
-
 import React, { useState, useRef, useCallback } from 'react';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
@@ -17,7 +15,6 @@ const localizer = dateFnsLocalizer({
   locales,
 });
 
-// 💡 【修正】エラーの原因だった「isMemoEvent」の未読宣言を削除しました。
 
 interface CalendarViewProps {
   events: CalendarEvent[];
@@ -70,6 +67,7 @@ const DragHandle: React.FC<DragHandleProps> = ({ position, onDrag }) => {
       if (!dragging.current) return;
       const delta = ev.clientY - lastY.current;
       lastY.current = ev.clientY;
+      // 上ハンドル：下方向に引く→縮む、上方向→伸びる（反転）
       onDrag(position === 'top' ? -delta : delta);
     };
     const onUp = () => {
@@ -126,22 +124,22 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   }, []);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // 💡 【修正】「□MEMO」等から始まるisBatchイベントかどうか厳密に判定してエディタを連動
-    const isMemo = event.isBatch && event.title.replace(/^[□☑△]\s*/, '').toUpperCase().startsWith('MEMO');
-    
-    if (isMemo) {
+    // isBatch（□MEMOを含む）：ポップアップ表示 + BatchEditor を開く
+    if (event.isBatch) {
       setPopupEvent(event);
-      onSelectEvent(event); // BatchEditorを呼び出す
+      onSelectEvent(event);
       return;
     }
-    // 通常イベントやそれ以外の予定：ポップアップ表示のみ行う
+    // 通常イベント：ポップアップのみ（チェック切り替えはしない）
     setPopupEvent(event);
   }, [onSelectEvent]);
 
   return (
     <div className="calendar-resizable-wrapper">
+      {/* 上ハンドル */}
       <DragHandle position="top" onDrag={handleDrag} />
 
+      {/* カレンダー本体 */}
       <Calendar
         localizer={localizer}
         events={events}
@@ -174,8 +172,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
         }}
       />
 
+      {/* 下ハンドル */}
       <DragHandle position="bottom" onDrag={handleDrag} />
 
+      {/* イベントポップアップ */}
       {popupEvent && (
         <EventPopup
           event={popupEvent}
