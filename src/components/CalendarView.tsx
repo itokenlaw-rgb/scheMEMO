@@ -94,15 +94,20 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     setCalHeight(h => Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, h + delta)));
   }, []);
 
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // 💡 タイトルに MEMO が含まれるか、または isBatch 属性があるものを一括管理対象とする
-    const isMemo = event.isBatch || (event.title && event.title.toUpperCase().includes('MEMO'));
+const handleSelectEvent = useCallback((event: CalendarEvent) => {
+    // 💡 タイトルから記号やスペースを除去して「MEMO」が含まれるか、または isBatch フラグで確実に判定
+    const cleanTitle = (event.title || '').replace(/\s+/g, '').toUpperCase();
+    const isMemo = event.isBatch || cleanTitle.includes('MEMO');
     
     if (isMemo) {
-      setPopupEvent(event);   // 前面ポップアップ表示
-      onSelectEvent(event);   // BatchEditorへ抽出連動
+      setPopupEvent(event);   // 前面ポップアップを表示
+      onSelectEvent(event);   // BatchEditorへ確実に抽出連動させる
       return;
     }
+    
+    // 通常予定の場合
+    setPopupEvent(event);
+  }, [onSelectEvent]);
     
     setPopupEvent(event);
   }, [onSelectEvent]);

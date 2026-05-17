@@ -186,30 +186,13 @@ function App() {
     }
   };
 
-  // ── 予定選択（チェック切り替え / バッチ編集） ─────────────────────────────
-  const handleSelectEvent = async (event: CalendarEvent) => {
-    if (event.isBatch) {
-      setSelectedEvent(event);
-    } else {
-      const newStatus = (event.status === 'checked' ? 'unchecked' : 'checked') as EventStatus;
-      const newTitle = newStatus === 'checked' ? event.title.replace('□', '☑') : event.title.replace('☑', '□');
-      const updatedEvent = { ...event, status: newStatus, title: newTitle };
-      if (accessToken && !event.id.startsWith('evt-')) {
-        setIsLoading(true);
-        try {
-          await updateGoogleEvent(accessToken, updatedEvent);
-          await refreshEvents();
-        } catch (error) {
-          console.error(error);
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        updateMockEvent(updatedEvent);
-        setEvents(getMockEvents());
-      }
-    }
-  };
+// ── カレンダーでイベントをクリックした時 ──────────────────────────────
+  const handleSelectEvent = useCallback((event: CalendarEvent) => {
+    // 💡 【修正】クリック時にステータス（□ ⇔ ☑）を自動反転して保存する古い処理を削除しました。
+    // 今後は状態変更をBatchエディター内でのみ行います。
+    setSelectedEvent(event);
+  }, []);
+
 
   // ── タスクをまとめる ──────────────────────────────────────────────────────
   const handleMergeWeeklyMemos = async () => {
