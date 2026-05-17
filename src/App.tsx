@@ -5,7 +5,7 @@ import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
 import { BatchEditor } from './components/BatchEditor';
 import { SettingsPanel } from './components/SettingsPanel';
-import type { CalendarEvent, BatchItem } from './types'; // 💡 EventStatus を削除
+import type { CalendarEvent, BatchItem } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
 import { 
@@ -23,7 +23,6 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  // ── ログイン（App(11)方式：useGoogleLogin） ──────────────────────────────
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
       setAccessToken(tokenResponse.access_token);
@@ -33,7 +32,6 @@ function App() {
     onError: (error) => console.log('Login Failed:', error),
   });
 
-  // ── ログアウト（App(11)方式：確認ダイアログなし） ──────────────────────
   const logout = () => {
     setAccessToken(null);
     localStorage.removeItem('google_access_token');
@@ -46,32 +44,25 @@ function App() {
     else setEvents(getMockEvents());
   }, []);
 
-  // ── 双方向同期（App.tsxの構成 + App(11)の401自動ログアウト） ────────────
   const refreshEvents = useCallback(async () => {
     if (!accessToken) return;
     setIsLoading(true);
 
     try {
-      // Step A: 未同期予定（evt- 仮ID）をGoogleへ書き出し
       const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
       if (unSyncedEvents.length > 0) {
-        console.log(`${unSyncedEvents.length}件の未同期データをGoogleカレンダーに保存中...`);
         for (const event of unSyncedEvents) {
           try {
             await createGoogleEvent(accessToken, event);
           } catch (err) {
-            console.error(`「${event.title}」の保存に失敗しました:`, err);
+            console.error(`失敗しました:`, err);
           }
         }
       }
-
-      // Step B: Googleから最新予定を取得して画面に反映
       const fetchedEvents = await fetchGoogleEvents(accessToken);
       setEvents(fetchedEvents);
-
     } catch (error) {
-      console.error('同期処理中にエラーが発生しました:', error);
-      // 401エラー（トークン期限切れ）の場合は自動ログアウト
+      console.error('同期エラー:', error);
       if ((error as any).message?.includes('401')) logout();
     } finally {
       setIsLoading(false);
@@ -86,7 +77,7 @@ function App() {
           const fetchedEvents = await fetchGoogleEvents(accessToken);
           setEvents(fetchedEvents);
         } catch (error) {
-          console.error('初回イベント取得に失敗しました', error);
+          console.error(error);
         } finally {
           setIsLoading(false);
         }
@@ -95,23 +86,19 @@ function App() {
     }
   }, [accessToken]);
 
-  // ── 設定 ──────────────────────────────────────────────────────────────────
   const handleSaveSettings = (newSettings: TimeSettings) => {
     setTimeSettings(newSettings);
     saveSettings(newSettings);
     setShowSettings(false);
   };
 
-// ── MEMOを編集（App.tsx固有機能） ────────────────────────────────────────
   const handleMergeMemosClick = () => {
     const extractedBatchEvents = extractMemosFromSettingsRange(events, timeSettings);
-    // 💡 配列が返ってくるため、データが存在すれば最初の1件目をエディターにセットする
     if (extractedBatchEvents && extractedBatchEvents.length > 0) {
       setSelectedEvent(extractedBatchEvents[0]);
     }
   };
 
-  // ── クイックメモ保存 ──────────────────────────────────────────────────────
   const handleSaveSingle = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
@@ -120,7 +107,7 @@ function App() {
         setEvents(prev => [...prev, savedGoogleEvent]);
         await refreshEvents();
       } catch (error) {
-        console.error('Googleカレンダーへのクイックメモ保存に失敗しました:', error);
+        console.error(error);
         await refreshEvents();
       } finally {
         setIsLoading(false);
@@ -131,11 +118,12 @@ function App() {
     }
   };
 
-  // ── バッチ保存 ────────────────────────────────────────────────────────────
+  // ── 【５】バッチ保存 ────────────────────────────────────────────────────────────
   const handleSaveBatch = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
       try {
+        // 仮IDでない既存ID、かつ今回更新対象のIDが完全に一致する場合のみ既存上書き、それ以外は新規作成
         if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
           await updateGoogleEvent(accessToken, event);
         } else {
@@ -159,14 +147,18 @@ function App() {
     }
   };
 
-  // ── 繰り越し ──────────────────────────────────────────────────────────────
   const handleCarryOver = async (items: BatchItem[]) => {
+    const today21 = new Date();
+    today21.setHours(21, 0, 0, 0);
+    const today22 = new Date();
+    today22.setHours(22, 0, 0, 0);
+
     const newEvent: CalendarEvent = {
       id: `evt-${Date.now()}-carry`,
-      title: '□ やること',
-      start: new Date(),
-      end: new Date(),
-      memo: items.map(item => `${item.checked ? '☑' : '□'} ${item.text}`).join('\n'),
+      title: '□MEMO',
+      start: today21,
+      end: today22,
+      memo: items.map(item => `${item.checked ? '☑' : '□'} ${item.text.replace(/^[□☑]\s*/, '').trim()}`).join('\n'),
       status: 'unchecked',
       isBatch: true,
     };
@@ -186,15 +178,10 @@ function App() {
     }
   };
 
-// ── カレンダーでイベントをクリックした時 ──────────────────────────────
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // 💡 【修正】クリック時にステータス（□ ⇔ ☑）を自動反転して保存する古い処理を削除しました。
-    // 今後は状態変更をBatchエディター内でのみ行います。
     setSelectedEvent(event);
   }, []);
 
-
-  // ── タスクをまとめる ──────────────────────────────────────────────────────
   const handleMergeWeeklyMemos = async () => {
     const before = timeSettings.mergeDaysBefore ?? 7;
     const after = timeSettings.mergeDaysAfter ?? 7;
@@ -232,7 +219,6 @@ function App() {
     }
   };
 
-  // ── JSX ──────────────────────────────────────────────────────────────────
   return (
     <div className="app-container">
       <header className="app-header">

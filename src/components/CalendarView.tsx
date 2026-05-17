@@ -84,7 +84,7 @@ const DragHandle: React.FC<DragHandleProps> = ({ position, onDrag }) => {
 
 const MIN_HEIGHT = 300;
 const MAX_HEIGHT = 900;
-const DEFAULT_HEIGHT = 650; // 💡 縦長表示（全体的に大きく）
+const DEFAULT_HEIGHT = 650;
 
 export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEvent }) => {
   const [calHeight, setCalHeight] = useState(DEFAULT_HEIGHT);
@@ -95,13 +95,18 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   }, []);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // 💡 タイトルから記号やスペースを除去して「MEMO」が含まれるか、または isBatch フラグで確実に判定
     const cleanTitle = (event.title || '').replace(/\s+/g, '').toUpperCase();
-    const isMemo = event.isBatch || cleanTitle.includes('MEMO');
     
-    if (isMemo) {
+    // 【６】【７】「□MEMO」または「□」「☑」からはじまる通常予定もBatchエディターの対象に含める
+    const isMemoOrSingleTask = 
+      event.isBatch || 
+      cleanTitle.includes('MEMO') || 
+      event.title.startsWith('□') || 
+      event.title.startsWith('☑');
+    
+    if (isMemoOrSingleTask) {
       setPopupEvent(event);   // 前面ポップアップを表示
-      onSelectEvent(event);   // BatchEditorへ確実に抽出連動させる
+      onSelectEvent(event);   // BatchEditorへデータを流してトップへ動かす
       return;
     }
     

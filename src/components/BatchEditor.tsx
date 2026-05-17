@@ -1,12 +1,11 @@
 // src/components/BatchEditor.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { CalendarEvent, TimeOption, BatchItem } from '../types';
 import { 
-  calculateEventTime, 
   stringifyBatchMemo, 
   determineBatchStatus, 
   getBatchTitlePrefix 
-} from '../utils/calendarUtils'; // 💡 parseBatchMemo のインポートを削除
+} from '../utils/calendarUtils';
 import { Check, Save, Plus, ArrowRight, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -30,14 +29,36 @@ const timeOptions: { value: TimeOption; label: string }[] = [
 
 export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, initialEvent, onClose }) => {
   const [items, setItems] = useState<BatchItem[]>([]);
-  const [selectedTime, setSelectedTime] = useState<TimeOption>('today');
   const [carryOverTime, setCarryOverTime] = useState<TimeOption>('tomorrow');
   const [memoTitle, setMemoTitle] = useState('□MEMO');
+  const [isTitleChecked, setIsTitleChecked] = useState(false);
+
+  // 【７】トップ移動用のRef
+  const topRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // 💡 initialEventが存在し、バッチ予定、またはタイトルにMEMOを含む場合に抽出
-    if (initialEvent && (initialEvent.isBatch || initialEvent.title.toUpperCase().includes('MEMO'))) {
-      setMemoTitle(initialEvent.title);
+    // 【６】【７】カレンダーイベントが選択されたらトップへスクロール
+    if (initialEvent) {
+      topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    if (initialEvent) {
+      // 💡 タイトルから記号を剥ぎ取ってクリーンにする
+      const rawTitle = initialEvent.title.replace(/^[□☑△]\s*/, '').trim();
+      const hasMemo = initialEvent.title.toUpperCase().includes('MEMO') || initialEvent.isBatch;
+
+      if (hasMemo) {
+        setMemoTitle(initialEvent.title);
+        // タイトル自体のチェック状態を判定
+        setIsTitleChecked(/^☑/.test(initialEvent.title));
+      } else if (initialEvent.title.startsWith('□') || initialEvent.title.startsWith('☑')) {
+        // 【６】単発の「□」タスクの場合
+        setMemoTitle(initialEvent.title);
+        setIsTitleChecked(/^☑/.test(initialEvent.title));
+      } else {
+        setMemoTitle(`□ ${rawTitle}`);
+        setIsTitleChecked(false);
+      }
 
       const memo = initialEvent.memo ?? '';
       const lines = memo.split('\n').map((l: string) => l.trim()).filter((l: string) => l !== '');
@@ -54,7 +75,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           };
         });
 
-        // 抽出枠数が3つ以上（埋まった状態）であれば空欄を3つ足す
         if (extractedItems.length >= 3) {
           const emptyItems: BatchItem[] = Array(3).fill(null).map((_: null, i: number) => ({
             id: `item-${Date.now()}-empty-${i}`,
@@ -63,7 +83,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           }));
           setItems([...extractedItems, ...emptyItems]);
         } else {
-          // 3つ未満の場合は、足りない分を補って合計3枠以上にするか、そのままセット
           const deficit = 3 - extractedItems.length;
           const emptyItems: BatchItem[] = Array(deficit).fill(null).map((_: null, i: number) => ({
             id: `item-${Date.now()}-empty-${i}`,
@@ -73,14 +92,18 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           setItems([...extractedItems, ...emptyItems]);
         }
       } else {
+        // 単発タスクでメモが空の場合は、そのタイトル自体を1つ目のリスト要素として入れてあげる
+        const cleanTitle = initialEvent.title.replace(/^[□☑]\s*/, '').trim();
+        const checked = /^☑/.test(initialEvent.title);
         setItems([
-          { id: `item-1`, text: '□　', checked: false },
+          { id: `item-1`, text: `${checked ? '☑' : '□'}　${cleanTitle}`, checked: checked },
           { id: `item-2`, text: '□　', checked: false },
           { id: `item-3`, text: '□　', checked: false },
         ]);
       }
     } else {
       setMemoTitle('□MEMO');
+      setIsTitleChecked(false);
       setItems([
         { id: `item-1`, text: '□　', checked: false },
         { id: `item-2`, text: '□　', checked: false },
@@ -88,6 +111,25 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       ]);
     }
   }, [initialEvent]);
+
+  // 【１】タイトル横のチェックボックスを押した時の一括連動
+  const toggleTitleCheck = () => {
+    const nextChecked = !isTitleChecked;
+    setIsTitleChecked(nextChecked);
+
+    const cleanTitle = memoTitle.replace(/^[□☑]\s*/, '').trim();
+    setMemoTitle(`${nextChecked ? '☑' : '□'} ${cleanTitle}`);
+
+    // 個別リストも全部一括で変更
+    setItems(items.map(item => {
+      const cleanText = item.text.replace(/^[□☑]\s*/, '').trim();
+      return {
+        ...item,
+        checked: nextChecked,
+        text: `${nextChecked ? '☑' : '□'}　${cleanText}`
+      };
+    }));
+  };
 
   const handleTextChange = (id: string, text: string) => {
     setItems(items.map(item => item.id === id ? { ...item, text } : item));
@@ -108,46 +150,78 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     }));
   };
 
-  const addItems = () => {
-    const newItems = Array(3).fill(null).map((_, i) => ({
-      id: `item-${Date.now()}-${i}`,
+  // 【３】1つずつ枠を増加させるように変更
+  const addSingleItem = () => {
+    const newItem = {
+      id: `item-${Date.now()}`,
       text: '□　',
       checked: false
-    }));
-    setItems([...items, ...newItems]);
-  };
-
-  const checkAll = () => {
-    setItems(items.map(item => {
-      const cleanText = item.text.replace(/^[□☑]\s*/, '').trim();
-      return { ...item, checked: true, text: `☑　${cleanText}` };
-    }));
+    };
+    setItems([...items, newItem]);
   };
 
   const deleteItem = (id: string) => {
     setItems(items.filter(item => item.id !== id));
   };
 
+  // 【５】21時固定の時間を生成するヘルパー
+  const get21PMTime = (baseDate: Date = new Date()) => {
+    const start = new Date(baseDate);
+    start.setHours(21, 0, 0, 0);
+    const end = new Date(baseDate);
+    end.setHours(22, 0, 0, 0); // 1時間の枠として設定
+    return { start, end };
+  };
+
   const handleSave = () => {
     const validItems = items.filter(item => item.text.replace(/^[□☑]\s*/, '').trim() !== '');
     if (validItems.length === 0) return;
 
-    const status = determineBatchStatus(validItems);
-    const prefix = getBatchTitlePrefix(status);
-    const rawTitle = memoTitle.replace(/^[□☑△]\s*/, '').trim() || 'やること';
-    const title = `${prefix} ${rawTitle}`;
-    const memo = stringifyBatchMemo(validItems.map(i => ({
-      ...i,
-      text: i.text.replace(/^[□☑]\s*/, '').trim()
-    })));
+    // 【５】☑ と □ のタスクを分離
+    const checkedItems = validItems.filter(i => i.checked);
+    const uncheckedItems = validItems.filter(i => !i.checked);
 
-    if (initialEvent) {
-      onSave({ ...initialEvent, title, memo, status, isBatch: true });
-    } else {
-      const { start, end } = calculateEventTime(selectedTime);
-      onSave({ id: `evt-${Date.now()}`, title, start, end, memo, status, isBatch: true });
+    const baseDate = initialEvent ? new Date(initialEvent.start) : new Date();
+    const { start, end } = get21PMTime(baseDate);
+
+    // 💡 A. 完了タスク（☑）のまとめ登録
+    if (checkedItems.length > 0) {
+      const memo = stringifyBatchMemo(checkedItems.map(i => ({
+        ...i,
+        text: i.text.replace(/^[□☑]\s*/, '').trim()
+      })));
+      
+      onSave({
+        id: initialEvent && isTitleChecked ? initialEvent.id : `evt-${Date.now()}-checked`,
+        title: '☑MEMO',
+        start,
+        end,
+        memo,
+        status: 'checked',
+        isBatch: true
+      });
     }
+
+    // 💡 B. 未完了タスク（□）のまとめ登録
+    if (uncheckedItems.length > 0) {
+      const memo = stringifyBatchMemo(uncheckedItems.map(i => ({
+        ...i,
+        text: i.text.replace(/^[□☑]\s*/, '').trim()
+      })));
+
+      onSave({
+        id: initialEvent && !isTitleChecked ? initialEvent.id : `evt-${Date.now()}-unchecked`,
+        title: '□MEMO',
+        start,
+        end,
+        memo,
+        status: 'unchecked',
+        isBatch: true
+      });
+    }
+
     setMemoTitle('□MEMO');
+    setIsTitleChecked(false);
     onClose();
   };
 
@@ -160,26 +234,32 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   };
 
   return (
-    <div className="card batch-editor">
-      <div className="card-title" style={{ gap: '0.5rem' }}>
+    <div ref={topRef} className="card batch-editor">
+      {/* 【１】タイトル横に全体制御用のチェックボックスボタンを配置 */}
+      <div className="card-title" style={{ gap: '0.5rem', display: 'flex', alignItems: 'center' }}>
+        <button 
+          className={clsx('checkbox-btn', isTitleChecked && 'checked')}
+          onClick={toggleTitleCheck}
+          style={{ flexShrink: 0 }}
+        >
+          {isTitleChecked && <Check size={16} />}
+        </button>
         <input
           type="text"
           className="text-input"
           value={memoTitle}
           onChange={(e) => setMemoTitle(e.target.value)}
-          style={{ fontWeight: 700, fontSize: '1.1rem', flex: 1 }}
+          style={{ 
+            fontWeight: 700, 
+            fontSize: '1.1rem', 
+            flex: 1,
+            textDecoration: isTitleChecked ? 'line-through' : 'none',
+            opacity: isTitleChecked ? 0.6 : 1
+          }}
         />
       </div>
 
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.75rem' }}>
-        <button className="btn btn-outline btn-sm" onClick={checkAll}>
-          <Check size={16} /> 全部実行済み
-        </button>
-        <button className="btn btn-outline btn-sm" onClick={addItems}>
-          <Plus size={16} /> リスト追加
-        </button>
-      </div>
-
+      {/* 【２】「全部実行済み」ボタンを削除 */}
       <div className="batch-list">
         {items.map(item => (
           <div key={item.id} className="input-group" style={{ marginBottom: 0 }}>
@@ -224,19 +304,14 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         ))}
       </div>
 
-      {!initialEvent && (
-        <div className="time-grid" style={{ marginTop: '0.875rem' }}>
-          {timeOptions.map(opt => (
-            <button
-              key={opt.value}
-              className={clsx('time-btn', selectedTime === opt.value && 'active')}
-              onClick={() => setSelectedTime(opt.value)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 【３】個別リスト群の真下に「リスト追加」ボタンを移動。1つずつ増える仕様に変更 */}
+      <div style={{ display: 'flex', marginTop: '0.5rem', marginBottom: '0.75rem' }}>
+        <button className="btn btn-outline btn-sm" onClick={addSingleItem} style={{ width: '100%' }}>
+          <Plus size={16} /> リスト追加
+        </button>
+      </div>
+
+      {/* 【４】下部にあった新規用の time-grid ボタン群は削除 */}
 
       <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
         <button className="btn btn-primary" onClick={handleSave} style={{ flex: 1 }}>
