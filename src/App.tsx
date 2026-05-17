@@ -102,10 +102,13 @@ function App() {
     setShowSettings(false);
   };
 
-  // ── MEMOを編集（App.tsx固有機能） ────────────────────────────────────────
+// ── MEMOを編集（App.tsx固有機能） ────────────────────────────────────────
   const handleMergeMemosClick = () => {
-    const extractedBatchEvent = extractMemosFromSettingsRange(events, timeSettings);
-    setSelectedEvent(extractedBatchEvent);
+    const extractedBatchEvents = extractMemosFromSettingsRange(events, timeSettings);
+    // 💡 配列が返ってくるため、データが存在すれば最初の1件目をエディターにセットする
+    if (extractedBatchEvents && extractedBatchEvents.length > 0) {
+      setSelectedEvent(extractedBatchEvents[0]);
+    }
   };
 
   // ── クイックメモ保存 ──────────────────────────────────────────────────────

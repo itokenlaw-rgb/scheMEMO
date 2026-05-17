@@ -3,11 +3,10 @@ import React, { useState, useEffect } from 'react';
 import type { CalendarEvent, TimeOption, BatchItem } from '../types';
 import { 
   calculateEventTime, 
-  parseBatchMemo, 
   stringifyBatchMemo, 
   determineBatchStatus, 
   getBatchTitlePrefix 
-} from '../utils/calendarUtils';
+} from '../utils/calendarUtils'; // 💡 parseBatchMemo のインポートを削除
 import { Check, Save, Plus, ArrowRight, Trash2 } from 'lucide-react';
 import clsx from 'clsx';
 
