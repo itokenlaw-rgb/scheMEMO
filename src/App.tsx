@@ -5,7 +5,7 @@ import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
 import { BatchEditor } from './components/BatchEditor';
 import { SettingsPanel } from './components/SettingsPanel';
-import type { CalendarEvent, BatchItem, EventStatus } from './types';
+import type { CalendarEvent, BatchItem } from './types'; // 💡 EventStatus を削除
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
 import { 
