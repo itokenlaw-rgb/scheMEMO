@@ -61,7 +61,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   const startHeight = useRef(0);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    // （既存の処理のまま）
     const cleanTitle = (event.title || '').replace(/\s+/g, '').toUpperCase();
     const isMemoOrSingleTask = event.isBatch || cleanTitle.includes('MEMO') || event.title.startsWith('□') || event.title.startsWith('☑');
     if (isMemoOrSingleTask) {
@@ -72,25 +71,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     setPopupEvent(event);
   }, [onSelectEvent]);
 
-  // ─── カレンダー全体のドラッグリサイズ処理（修正版） ───
+  // ─── カレンダー全体のドラッグリサイズ処理（ピンポイント対象指定版） ───
 
   const startResize = (clientY: number, target: HTMLElement) => {
-    // 1. 通常のボタン、予定(イベント)を直接タップした場合はリサイズしない
+    // 1. 誤動作防止：予定(イベント)やその中身、各種ボタンを直接触っている場合は即座に弾く
     if (
-      target.closest('button') || 
       target.closest('.rbc-event') || 
-      target.closest('.custom-event-content')
+      target.closest('.custom-event-content') ||
+      target.closest('button')
     ) {
       return;
     }
 
-    // 2. 【追加】「前へ・次へ」のナビゲーションや「月・週・日」切り替え、および「日〜土」の曜日ヘッダー部分を対象外にする
-    if (
-      target.closest('.rbc-toolbar') ||       // 最上部のナビゲーションバー（前へ、次へ、今日など）
-      target.closest('.rbc-month-header') ||  // 月ビューの曜日ヘッダー（日〜土）
-      target.closest('.rbc-time-header')      // 週・日ビューの曜日・時間ヘッダー
-    ) {
-      return;
+    // 2. 【変更】日付のマス(背景セル)または日付の枠組みの中だけで反応するように限定
+    // .rbc-day-bg = 日付マスの背景
+    // .rbc-date-cell = 日付の数字部分
+    const isDayCell = target.closest('.rbc-day-bg') || target.closest('.rbc-date-cell');
+    
+    if (!isDayCell) {
+      return; // 日付マス以外（外側の余白やヘッダーなど全般）なら何もしない
     }
 
     isDragging.current = true;
