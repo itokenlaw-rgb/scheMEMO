@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { CalendarEvent, TimeOption, BatchItem } from '../types';
 import { stringifyBatchMemo } from '../utils/calendarUtils';
 import { loadSettings } from '../types/settings';
-import { Check, Save, Plus, ArrowRight, Trash2, RefreshCw } from 'lucide-react';
+import { Check, Plus, Trash2 } from 'lucide-react'; // 不要になったSave, ArrowRight, RefreshCwを削除
 import clsx from 'clsx';
 
 interface BatchEditorProps {
@@ -13,20 +13,8 @@ interface BatchEditorProps {
   onClose: () => void;
 }
 
-const timeOptions: { value: TimeOption; label: string }[] = [
-  { value: 'today', label: '今日中' },
-  { value: 'tomorrow', label: '明日中' },
-  { value: 'weekend', label: '週末' },
-  { value: 'endOfMonth', label: '月末' },
-  { value: 'tonight', label: '今日夜' },
-  { value: 'tomorrowNight', label: '明日夜' },
-  { value: 'nextWeek', label: '来週' },
-  { value: 'nextMonth', label: '来月' },
-];
-
 export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, initialEvent, onClose }) => {
   const [items, setItems] = useState<BatchItem[]>([]);
-  const [carryOverTime, setCarryOverTime] = useState<TimeOption>('tomorrow');
   const [memoTitle, setMemoTitle] = useState('□MEMO');
   const [isTitleChecked, setIsTitleChecked] = useState(false);
 
@@ -237,14 +225,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     onClose();
   };
 
-  const handleCarryOver = () => {
-    const uncheckedItems = items.filter(i => !i.checked && i.text.replace(/^[□☑\s]*/, '').trim() !== '');
-    if (uncheckedItems.length > 0) {
-      onCarryOver(uncheckedItems, carryOverTime);
-    }
-    handleUpdate21PMTime();
-  };
-
   return (
     <div ref={topRef} className="card batch-editor">
       {/* タイトルエリア */}
@@ -271,7 +251,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         />
       </div>
 
-{/* 個別タスクリスト（完全エクセル風・隙間ゼロ） */}
+      {/* 個別タスクリスト（完全エクセル風・隙間ゼロ） */}
       <div 
         className="batch-list" 
         style={{ 
@@ -282,7 +262,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           borderRadius: 'var(--radius-sm)', 
           overflow: 'hidden', 
           marginTop: '0.5rem',
-          backgroundColor: 'var(--border)' /* 境界線の役割のみを果たす */
+          backgroundColor: 'var(--border)'
         }}
       >
         {items.map((item, index) => {
@@ -291,12 +271,12 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
             <div
               key={item.id}
               style={{
-                margin: 0,              /* 外側の余白を完全にゼロにする */
-                padding: 0,             /* 内側の余白を完全にゼロにする */
-                gap: 0,                 /* 要素間の隙間をゼロにする */
-                border: 'none',         /* 既存のインプットグループの枠線を消す */
+                margin: 0,
+                padding: 0,
+                gap: 0,
+                border: 'none',
                 borderTop: index === 0 ? 'none' : '1px solid var(--border)',
-                backgroundColor: 'var(--background)', /* ←ここを入力欄と同じ薄いグレーに統一！ */
+                backgroundColor: 'var(--background)',
                 display: 'flex',
                 alignItems: 'stretch',
                 width: '100%',
@@ -310,9 +290,9 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                   flexShrink: 0,
                   borderRadius: 0,
                   border: 'none',
-                  borderRight: '1px solid var(--border)', /* セル間の縦線 */
+                  borderRight: '1px solid var(--border)',
                   margin: 0,
-                  width: '44px',     /* クリックしやすいサイズを維持 */
+                  width: '44px',
                   height: 'auto',
                   minWidth: '44px',
                   minHeight: '44px',
@@ -339,7 +319,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                   padding: '0.625rem 0.875rem',
                   height: 'auto',
                   minHeight: '44px',
-                  backgroundColor: 'var(--background)', /* 周りと同じ薄グレー */
+                  backgroundColor: 'var(--background)',
                   color: 'var(--text-main)',
                 }}
               />
@@ -351,7 +331,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  borderLeft: '1px solid var(--border)', /* セル間の縦線 */
+                  borderLeft: '1px solid var(--border)',
                   cursor: 'pointer',
                   color: 'var(--text-muted)',
                   padding: 0,
@@ -389,7 +369,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           onClick={handleSaveOriginalTime} 
           style={{ flex: 1, minHeight: '44px', gap: '0.25rem' }}
         >
-          <Save size={16} /> ☑□保存
+          ☑□保存
         </button>
 
         <button 
@@ -397,7 +377,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           onClick={handleUpdate21PMTime} 
           style={{ flex: 1, minHeight: '44px', gap: '0.25rem' }}
         >
-          <RefreshCw size={16} /> ☑更新□
+          ☑更新□
         </button>
 
         {initialEvent && (
@@ -406,26 +386,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           </button>
         )}
       </div>
-
-      {initialEvent && (
-        <div style={{ marginTop: '2rem', paddingTop: '1rem', borderTop: '1px solid var(--border)' }}>
-          <h3 style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>未完了を持ち越す</h3>
-          <div className="time-grid" style={{ marginBottom: '0.5rem' }}>
-            {timeOptions.map(opt => (
-              <button
-                key={`carry-${opt.value}`}
-                className={clsx('time-btn', carryOverTime === opt.value && 'active')}
-                onClick={() => setCarryOverTime(opt.value)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-          <button className="btn btn-secondary btn-full" onClick={handleCarryOver}>
-            <ArrowRight size={18} /> やることを持ち越す
-          </button>
-        </div>
-      )}
     </div>
   );
 };

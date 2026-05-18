@@ -56,37 +56,39 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   const [calHeight, setCalHeight] = useState(DEFAULT_HEIGHT);
   const [popupEvent, setPopupEvent] = useState<CalendarEvent | null>(null);
 
-  // ドラッグ管理用のRef
   const isDragging = useRef(false);
   const startY = useRef(0);
   const startHeight = useRef(0);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
+    // （既存の処理のまま）
     const cleanTitle = (event.title || '').replace(/\s+/g, '').toUpperCase();
-    
-    const isMemoOrSingleTask = 
-      event.isBatch || 
-      cleanTitle.includes('MEMO') || 
-      event.title.startsWith('□') || 
-      event.title.startsWith('☑');
-    
+    const isMemoOrSingleTask = event.isBatch || cleanTitle.includes('MEMO') || event.title.startsWith('□') || event.title.startsWith('☑');
     if (isMemoOrSingleTask) {
       setPopupEvent(event);
       onSelectEvent(event);
       return;
     }
-    
     setPopupEvent(event);
   }, [onSelectEvent]);
 
-  // ─── カレンダー全体のドラッグリサイズ処理 ───
+  // ─── カレンダー全体のドラッグリサイズ処理（修正版） ───
 
   const startResize = (clientY: number, target: HTMLElement) => {
-    // ボタンや予定(イベント)を直接タップした場合はリサイズを起動しない
+    // 1. 通常のボタン、予定(イベント)を直接タップした場合はリサイズしない
     if (
       target.closest('button') || 
       target.closest('.rbc-event') || 
       target.closest('.custom-event-content')
+    ) {
+      return;
+    }
+
+    // 2. 【追加】「前へ・次へ」のナビゲーションや「月・週・日」切り替え、および「日〜土」の曜日ヘッダー部分を対象外にする
+    if (
+      target.closest('.rbc-toolbar') ||       // 最上部のナビゲーションバー（前へ、次へ、今日など）
+      target.closest('.rbc-month-header') ||  // 月ビューの曜日ヘッダー（日〜土）
+      target.closest('.rbc-time-header')      // 週・日ビューの曜日・時間ヘッダー
     ) {
       return;
     }
@@ -97,7 +99,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
 
     const onMove = (moveY: number) => {
       if (!isDragging.current) return;
-      // 下に引っ張ったら高く、上に引っ張ったら低くする
       const deltaY = moveY - startY.current;
       setCalHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight.current + deltaY)));
     };
@@ -105,7 +106,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     const handleMouseMove = (e: MouseEvent) => onMove(e.clientY);
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length > 0) {
-        // スワイプによる画面全体のスクロールを防止
         if (e.cancelable) e.preventDefault();
         onMove(e.touches[0].clientY);
       }
@@ -125,12 +125,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     window.addEventListener('touchend', onUp);
   };
 
-  // マウス（PC）での操作開始
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     startResize(e.clientY, e.target as HTMLElement);
   };
 
-  // タッチ（スマホ）での操作開始
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length > 0) {
       startResize(e.touches[0].clientY, e.target as HTMLElement);
@@ -143,9 +141,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       style={{ 
-        cursor: 'ns-resize', // マウスホバー時に上下矢印のカーソルにして、引っ張れることを直感的に伝える
-        touchAction: 'none',  // スマホでの予期せぬスクロール挙動を防止
-        userSelect: 'none'    // ドラッグ中に文字が選択されて青くなるのを防ぐ
+        touchAction: 'none',
+        userSelect: 'none'
       }}
     >
       <Calendar
