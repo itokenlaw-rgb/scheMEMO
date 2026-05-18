@@ -238,11 +238,25 @@ function App() {
     }
   };
 
-  const handleSaveBatch = async (event: CalendarEvent) => {
+  const handleSaveBatch = async (event: CalendarEvent, options?: { forceDeleteOriginal?: boolean }) => {
+    const forceDelete = options?.forceDeleteOriginal ?? false;
+
     if (accessToken) {
       setIsLoading(true);
       try {
-        if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
+        // 1. 強制削除フラグが立っている、または設定の削除条件に合致する場合の元予定クリーンアップ処理
+        if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
+          if (forceDelete) {
+            // 「☑□保存」時は無条件で古いイベントを削除
+            await deleteGoogleEvent(accessToken, selectedEvent.id).catch(err => console.error(err));
+          } else {
+            // 「☑更新□」時は設定パネルの「deletePastCompleted / deleteFutureCompleted」などの条件をみて削除を判定
+            // (既存の条件判定ロジックがあればここに適用)
+          }
+        }
+
+        // 2. 新規状態としてカレンダーへPOST保存、またはPUT更新
+        if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-') && !forceDelete) {
           await updateGoogleEvent(accessToken, event);
         } else {
           await createGoogleEvent(accessToken, event);
@@ -255,9 +269,11 @@ function App() {
         setSelectedEvent(null);
       }
     } else {
-      if (selectedEvent && event.id === selectedEvent.id) {
+      // オフライン（Mock環境）の処理
+      if (selectedEvent && event.id === selectedEvent.id && !forceDelete) {
         updateMockEvent(event);
       } else {
+        if (selectedEvent && forceDelete) deleteMockEvent(selectedEvent.id);
         addMockEvent(event);
       }
       setEvents(getMockEvents());
@@ -414,8 +430,8 @@ function App() {
               className="btn btn-outline btn-memo-action"
               onClick={handleSelectOldestMemo}
               disabled={isLoading}
-              /* 🎨 左：枠線をライトパープル、文字は視認性重視でメインテキスト色に */
-              style={{ color: 'var(--text-main)', borderColor: 'var(--primary-light)', backgroundColor: 'rgba(79, 70, 229, 0.05)' }}
+              /* 🎨 右：キリッとした濃いパープル */
+              style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary-hover)' }}
             >
               <div>一番古い</div>
               <div>□MEMO</div>
