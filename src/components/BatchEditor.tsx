@@ -276,7 +276,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         className="batch-list" 
         style={{ 
           display: 'flex',
-          flexDirection: column,
+          flexDirection: 'column',
           gap: 0, // 外枠の中の隙間をゼロに
           border: '1px solid var(--border)', 
           borderRadius: 'var(--radius-sm)', 
