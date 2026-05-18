@@ -107,18 +107,23 @@ function App() {
   };
 
   // BatchEditor（一括エディター）用の保存制御関数
-  const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[]) => {
+  // saveMode: 'save'=☑□保存, 'update'=☑更新□
+  const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
+
+    const deletePast = saveMode === 'update'
+      ? timeSettings.updateDeletePastCompleted
+      : timeSettings.saveDeletePastCompleted;
+    const deleteFuture = saveMode === 'update'
+      ? timeSettings.updateDeleteFutureCompleted
+      : timeSettings.saveDeleteFutureCompleted;
 
     if (accessToken) {
       setIsLoading(true);
       try {
         if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
           const isPast = new Date(selectedEvent.start) < new Date();
-          const shouldDelete = isPast 
-            ? timeSettings.deletePastCompleted 
-            : timeSettings.deleteFutureCompleted;
-
+          const shouldDelete = isPast ? deletePast : deleteFuture;
           const idReused = eventsToSave.some(e => e.id === selectedEvent.id);
           if (shouldDelete && !idReused) {
             await deleteGoogleEvent(accessToken, selectedEvent.id).catch(err => console.error(err));
@@ -142,8 +147,7 @@ function App() {
     } else {
       if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
         const isPast = new Date(selectedEvent.start) < new Date();
-        const shouldDelete = isPast ? timeSettings.deletePastCompleted : timeSettings.deleteFutureCompleted;
-        
+        const shouldDelete = isPast ? deletePast : deleteFuture;
         const idReused = eventsToSave.some(e => e.id === selectedEvent.id);
         if (shouldDelete && !idReused) deleteMockEvent(selectedEvent.id);
       }
@@ -325,14 +329,14 @@ function App() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'center',
-                borderColor: '#e5e7eb',
-                backgroundColor: '#f3f4f6',
-                color: '#1f2937',
+                borderColor: '#3b82f6',
+                backgroundColor: '#ffffff',
+                color: '#3b82f6',
                 fontWeight: '600'
               }}
             >
               <div>一番古い</div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#6b7280' }}>□メモ</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#3b82f6' }}>□メモ</div>
             </button>
 
             <button
@@ -356,8 +360,8 @@ function App() {
                 fontWeight: '600'
               }}
             >
-              <div>□メモを</div>
-              <div style={{ fontSize: '0.8rem', color: '#d97706' }}>しよう</div>
+              <div>□MEMOを</div>
+              <div style={{ fontSize: '0.8rem', color: '#d97706' }}>集める</div>
             </button>
 
             <button
@@ -377,12 +381,12 @@ function App() {
                 justifyContent: 'center',
                 borderColor: '#3b82f6',
                 backgroundColor: '#ffffff',
-                color: '#2563eb',
+                color: '#3b82f6',
                 fontWeight: '600'
               }}
             >
               <div>最新の</div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#6b7280' }}>□メモ</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#3b82f6' }}>□メモ</div>
             </button>
           </div>
         </div>

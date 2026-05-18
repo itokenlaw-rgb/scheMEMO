@@ -1,53 +1,68 @@
 // src/types/settings.ts
 
-export type DayOfWeek = '月' | '火' | '水' | '木' | '金' | '土' | '日';
-
-export interface TodaySettings {
-  mode: 'relative' | 'fixed';
-  relativeMinutes: number;
-  fixedTime: string;
-}
-
-export interface TomorrowSettings {
-  mode: 'fixed';
-  fixedTime: string;
-}
-
 export interface TimeSettings {
-  today: TodaySettings;
-  tomorrow: TomorrowSettings;
-  tonight: { fixedTime: string };
-  tomorrowNight: { fixedTime: string };
-  weekend: { dow: DayOfWeek; time: string };
-  endOfMonth: { mode: 'fixed' | 'lastDay' | 'lastDow'; day: number; dow: DayOfWeek };
-  nextWeek: { dow: DayOfWeek; time: string };
-  nextMonth: { day: number; time: string };
-  
-  // 抽出・統合・完了タスクの設定項目
-  deletePastCompleted: boolean;     // 過去の完了タスクは削除する
-  deleteFutureCompleted: boolean;   // 将来の完了タスクは削除する
-  memoDaysBefore: number;           // □MEMO抽出範囲（〇日前）
-  memoDaysAfter: number;            // □MEMO抽出範囲（〇日後）
-  mergeDaysBefore: number;          // タスクをまとめる範囲（〇日前）
-  mergeDaysAfter: number;           // タスクをまとめる範囲（〇日後）
+  // ── 【基本設定】 ──────────────────────────────────────────────
+  // クイックメモ「保存」の時刻（本日の〇時）
+  quickMemoSaveHour: number;        // 0-23、デフォルト 21
+  // □MEMO「保存」の時刻（本日の〇時）
+  batchMemoSaveHour: number;        // 0-23、デフォルト 21
+
+  // ── 【クイックメモの時間指定保存】 ──────────────────────────
+  // ① 〇時間後
+  preset1HoursLater: number;        // 0-24、デフォルト 3
+  // ② 今日の〇時
+  preset2TodayHour: number;         // 0-23、デフォルト 21
+  // ③ 明日の〇時
+  preset3TomorrowHour: number;      // 0-23、デフォルト 9
+  // ④ 明日の〇時（夜）
+  preset4TomorrowNightHour: number; // 0-23、デフォルト 21
+  // ⑤ 3日後の〇時
+  preset5In3DaysHour: number;       // 0-23、デフォルト 9
+  // ⑥ 土曜日の〇時
+  preset6SaturdayHour: number;      // 0-23、デフォルト 9
+
+  // ── 【「□タスクを□MEMOにする」抽出範囲】 ─────────────────
+  mergeDaysBefore: number;          // 0-15
+  mergeDaysAfter: number;           // 0-15
+
+  // ── 【「□MEMOを集める」抽出範囲】 ──────────────────────────
+  memoDaysBefore: number;           // 0-15
+  memoDaysAfter: number;            // 0-15
+
+  // ── 【☑□保存 の場合】 ────────────────────────────────────────
+  saveDeletePastCompleted: boolean;
+  saveDeleteFutureCompleted: boolean;
+
+  // ── 【☑更新□ の場合】 ───────────────────────────────────────
+  updateDeletePastCompleted: boolean;
+  updateDeleteFutureCompleted: boolean;
+
+  // 旧互換フィールド（削除しない）
+  deletePastCompleted?: boolean;
+  deleteFutureCompleted?: boolean;
 }
 
 export const DEFAULT_TIME_SETTINGS: TimeSettings = {
-  today: { mode: 'relative', relativeMinutes: 60, fixedTime: '09:00' },
-  tomorrow: { mode: 'fixed', fixedTime: '09:00' },
-  tonight: { fixedTime: '20:00' },
-  tomorrowNight: { fixedTime: '20:00' },
-  weekend: { dow: '土', time: '12:00' },
-  endOfMonth: { mode: 'lastDay', day: 25, dow: '金' },
-  nextWeek: { dow: '月', time: '09:00' },
-  nextMonth: { day: 1, time: '09:00' },
-  
-  deletePastCompleted: false,
-  deleteFutureCompleted: false,
-  memoDaysBefore: 0,
-  memoDaysAfter: 7,
-  mergeDaysBefore: 0,
+  quickMemoSaveHour: 21,
+  batchMemoSaveHour: 21,
+
+  preset1HoursLater: 3,
+  preset2TodayHour: 21,
+  preset3TomorrowHour: 9,
+  preset4TomorrowNightHour: 21,
+  preset5In3DaysHour: 9,
+  preset6SaturdayHour: 9,
+
+  mergeDaysBefore: 7,
   mergeDaysAfter: 7,
+
+  memoDaysBefore: 7,
+  memoDaysAfter: 7,
+
+  saveDeletePastCompleted: false,
+  saveDeleteFutureCompleted: false,
+  updateDeletePastCompleted: false,
+  updateDeleteFutureCompleted: false,
 };
 
 export function loadSettings(): TimeSettings {

@@ -2,12 +2,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { CalendarEvent, TimeOption, BatchItem } from '../types';
 import { stringifyBatchMemo } from '../utils/calendarUtils';
+import { loadSettings } from '../types/settings';
 import { Check, Save, Plus, ArrowRight, Trash2, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 
 // 親のSaveコールバックが、単一のイベントだけでなく配列（複数イベント）も受け取れるように型を定義
 interface BatchEditorProps {
-  onSave: (event: CalendarEvent | CalendarEvent[]) => void;
+  onSave: (event: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update') => void;
   onCarryOver: (items: BatchItem[], timeOption: TimeOption) => void;
   initialEvent: CalendarEvent | null;
   onClose: () => void;
@@ -153,10 +154,11 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
   };
 
   const get21PMTime = (baseDate: Date = new Date()) => {
+    const hour = loadSettings().batchMemoSaveHour ?? 21;
     const start = new Date(baseDate);
-    start.setHours(21, 0, 0, 0);
+    start.setHours(hour, 0, 0, 0);
     const end = new Date(baseDate);
-    end.setHours(22, 0, 0, 0);
+    end.setHours(hour + 1, 0, 0, 0);
     return { start, end };
   };
 
@@ -186,7 +188,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       memo,
       status: isTitleChecked ? 'checked' : 'unchecked',
       isBatch: true
-    });
+    }, 'save');
 
     cleanupEditor();
   };
@@ -231,7 +233,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
 
     // 構築したイベント（1つまたは2つ）をまとめて親に引き渡す
     if (eventsToSave.length > 0) {
-      onSave(eventsToSave);
+      onSave(eventsToSave, 'update');
     }
 
     cleanupEditor();
