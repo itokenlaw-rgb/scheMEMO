@@ -271,18 +271,18 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         />
       </div>
 
-      {/* 個別タスクリスト（エクセル格子状デザイン） */}
+{/* 個別タスクリスト（完全エクセル風・隙間ゼロ） */}
       <div 
         className="batch-list" 
         style={{ 
           display: 'flex',
           flexDirection: 'column',
-          gap: 0, // 外枠の中の隙間をゼロに
+          gap: 0,
           border: '1px solid var(--border)', 
           borderRadius: 'var(--radius-sm)', 
           overflow: 'hidden', 
           marginTop: '0.5rem',
-          backgroundColor: 'var(--border)' // 格子の線の色を背景色として利用
+          backgroundColor: 'var(--border)' /* 境界線の役割のみを果たす */
         }}
       >
         {items.map((item, index) => {
@@ -290,37 +290,39 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           return (
             <div
               key={item.id}
-              className="input-group"
               style={{
-                marginBottom: 0,
-                gap: 0, // 横方向の隙間をゼロに
+                margin: 0,              /* 外側の余白を完全にゼロにする */
+                padding: 0,             /* 内側の余白を完全にゼロにする */
+                gap: 0,                 /* 要素間の隙間をゼロにする */
+                border: 'none',         /* 既存のインプットグループの枠線を消す */
                 borderTop: index === 0 ? 'none' : '1px solid var(--border)',
-                backgroundColor: 'var(--surface)', // セルの背景色
+                backgroundColor: 'var(--background)', /* ←ここを入力欄と同じ薄いグレーに統一！ */
                 display: 'flex',
-                alignItems: 'stretch'
+                alignItems: 'stretch',
+                width: '100%',
               }}
             >
-              {/* チェックボタン（左側の独立したセル風） */}
+              {/* チェックボタン */}
               <button 
                 className={clsx('checkbox-btn', item.checked && 'checked')}
                 onClick={() => toggleCheck(item.id)}
                 style={{
                   flexShrink: 0,
-                  borderRadius: 0, // 角丸をなくして四角に
-                  border: 'none', // 外枠と重複しないよう個別のボーダーを排除
-                  borderRight: '1px solid var(--border)', // 列の境界線
+                  borderRadius: 0,
+                  border: 'none',
+                  borderRight: '1px solid var(--border)', /* セル間の縦線 */
                   margin: 0,
-                  width: '40px',
+                  width: '44px',     /* クリックしやすいサイズを維持 */
                   height: 'auto',
-                  minWidth: '40px',
-                  minHeight: '40px',
+                  minWidth: '44px',
+                  minHeight: '44px',
                   background: item.checked ? 'var(--primary)' : 'transparent',
                 }}
               >
                 {item.checked && <Check size={16} />}
               </button>
 
-              {/* テキスト入力欄（中央のセル風） */}
+              {/* テキスト入力欄 */}
               <input 
                 type="text" 
                 className="text-input"
@@ -330,32 +332,35 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                 style={{ 
                   textDecoration: (item.checked && hasText) ? 'line-through' : 'none', 
                   opacity: (item.checked && hasText) ? 0.6 : 1,
-                  borderRadius: 0, // 角丸をなくして四角に
-                  border: 'none', // 個別のボーダーを排除
+                  borderRadius: 0,
+                  border: 'none',
                   boxShadow: 'none',
                   flex: 1,
-                  padding: '0.5rem 0.75rem',
+                  padding: '0.625rem 0.875rem',
                   height: 'auto',
-                  minHeight: '40px',
-                  backgroundColor: 'transparent'
+                  minHeight: '44px',
+                  backgroundColor: 'var(--background)', /* 周りと同じ薄グレー */
+                  color: 'var(--text-main)',
                 }}
               />
 
-              {/* 削除ボタン（外枠の右側に並ぶ） */}
+              {/* 削除ボタン */}
               <button
                 onClick={() => deleteItem(item.id)}
                 title="削除"
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  borderLeft: '1px solid var(--border)', // 表の右端の境界線
+                  borderLeft: '1px solid var(--border)', /* セル間の縦線 */
                   cursor: 'pointer',
                   color: 'var(--text-muted)',
-                  padding: '0.25rem',
+                  padding: 0,
+                  margin: 0,
                   display: 'flex',
                   alignItems: 'center',
                   flexShrink: 0,
-                  minWidth: '36px',
+                  width: '40px',
+                  minWidth: '40px',
                   justifyContent: 'center',
                   borderRadius: 0,
                   transition: 'var(--transition)',
