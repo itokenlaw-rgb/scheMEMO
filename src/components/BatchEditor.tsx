@@ -45,7 +45,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
 
       if (hasMemo) {
         setMemoTitle(initialEvent.title);
-        // タイトル自体のチェック状態を判定
         setIsTitleChecked(/^☑/.test(initialEvent.title));
       } else if (initialEvent.title.startsWith('□') || initialEvent.title.startsWith('☑')) {
         // 【６】単発の「□」タスクの場合
@@ -88,11 +87,10 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           setItems([...extractedItems, ...emptyItems]);
         }
       } else {
-        // 単発タスクでメモが空の場合は、そのタイトル自体を1つ目のリスト要素として入れてあげる
-        const cleanTitle = initialEvent.title.replace(/^[□☑]\s*/, '').trim();
-        const checked = /^☑/.test(initialEvent.title);
+        // 【１】修正：内容（メモ欄）が空文字列、または何も記載がない場合は
+        // タイトルと同じ文字をリストの一番上に自動抽出せず、通常のデフォルト空枠だけをセットします。
         setItems([
-          { id: `item-1`, text: `${checked ? '☑' : '□'}　${cleanTitle}`, checked: checked },
+          { id: `item-1`, text: '□　', checked: false },
           { id: `item-2`, text: '□　', checked: false },
           { id: `item-3`, text: '□　', checked: false },
         ]);
@@ -108,7 +106,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     }
   }, [initialEvent]);
 
-  // 【１】タイトル横のチェックボックスを押した時の一括連動
+  // 【１】【２】タイトル横のチェックボックスを押した時の一括連動処理
   const toggleTitleCheck = () => {
     const nextChecked = !isTitleChecked;
     setIsTitleChecked(nextChecked);
@@ -116,9 +114,15 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     const cleanTitle = memoTitle.replace(/^[□☑]\s*/, '').trim();
     setMemoTitle(`${nextChecked ? '☑' : '□'} ${cleanTitle}`);
 
-    // 個別リストも全部一括で変更
+    // 【２】修正：個別リストを一括変更する際、内容（文字）が入っているものだけを対象にする
     setItems(items.map(item => {
       const cleanText = item.text.replace(/^[□☑]\s*/, '').trim();
+      
+      // もし□や☑のあとに中身の文字が何も書かれていなければ、チェックも削除線もつけない（維持する）
+      if (cleanText === '') {
+        return item;
+      }
+
       return {
         ...item,
         checked: nextChecked,
@@ -146,7 +150,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     }));
   };
 
-  // 【３】1つずつ枠を増加させるように変更
+  // 【３】1つずつ枠を増加させる仕様
   const addSingleItem = () => {
     const newItem = {
       id: `item-${Date.now()}`,
@@ -165,7 +169,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     const start = new Date(baseDate);
     start.setHours(21, 0, 0, 0);
     const end = new Date(baseDate);
-    end.setHours(22, 0, 0, 0); // 1時間の枠として設定
+    end.setHours(22, 0, 0, 0);
     return { start, end };
   };
 
@@ -180,7 +184,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     const baseDate = initialEvent ? new Date(initialEvent.start) : new Date();
     const { start, end } = get21PMTime(baseDate);
 
-    // 💡 A. 完了タスク（☑）のまとめ登録
+    // A. 完了タスク（☑）のまとめ登録
     if (checkedItems.length > 0) {
       const memo = stringifyBatchMemo(checkedItems.map(i => ({
         ...i,
@@ -198,7 +202,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       });
     }
 
-    // 💡 B. 未完了タスク（□）のまとめ登録
+    // B. 未完了タスク（□）のまとめ登録
     if (uncheckedItems.length > 0) {
       const memo = stringifyBatchMemo(uncheckedItems.map(i => ({
         ...i,
@@ -231,7 +235,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
 
   return (
     <div ref={topRef} className="card batch-editor">
-      {/* 【１】タイトル横に全体制御用のチェックボックスボタンを配置 */}
+      {/* タイトルエリア */}
       <div className="card-title" style={{ gap: '0.5rem', display: 'flex', alignItems: 'center' }}>
         <button 
           className={clsx('checkbox-btn', isTitleChecked && 'checked')}
@@ -255,60 +259,65 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         />
       </div>
 
-      {/* 【２】「全部実行済み」ボタンを削除 */}
+      {/* 個別タスクリスト */}
       <div className="batch-list">
-        {items.map(item => (
-          <div key={item.id} className="input-group" style={{ marginBottom: 0 }}>
-            <button 
-              className={clsx('checkbox-btn', item.checked && 'checked')}
-              onClick={() => toggleCheck(item.id)}
-            >
-              {item.checked && <Check size={16} />}
-            </button>
-            <input 
-              type="text" 
-              className="text-input"
-              value={item.text}
-              onChange={(e) => handleTextChange(item.id, e.target.value)}
-              placeholder="□　やること"
-              style={{ textDecoration: item.checked ? 'line-through' : 'none', opacity: item.checked ? 0.6 : 1 }}
-            />
-            <button
-              onClick={() => deleteItem(item.id)}
-              title="削除"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                color: 'var(--text-muted)',
-                padding: '0.25rem',
-                display: 'flex',
-                alignItems: 'center',
-                flexShrink: 0,
-                minWidth: '32px',
-                minHeight: '32px',
-                justifyContent: 'center',
-                borderRadius: 'var(--radius-sm)',
-                transition: 'var(--transition)',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
-              onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-        ))}
+        {items.map(item => {
+          const hasText = item.text.replace(/^[□☑]\s*/, '').trim() !== '';
+          return (
+            <div key={item.id} className="input-group" style={{ marginBottom: 0 }}>
+              <button 
+                className={clsx('checkbox-btn', item.checked && 'checked')}
+                onClick={() => toggleCheck(item.id)}
+              >
+                {item.checked && <Check size={16} />}
+              </button>
+              <input 
+                type="text" 
+                className="text-input"
+                value={item.text}
+                onChange={(e) => handleTextChange(item.id, e.target.value)}
+                placeholder="□　やること"
+                style={{ 
+                  textDecoration: (item.checked && hasText) ? 'line-through' : 'none', 
+                  opacity: (item.checked && hasText) ? 0.6 : 1 
+                }}
+              />
+              <button
+                onClick={() => deleteItem(item.id)}
+                title="削除"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-muted)',
+                  padding: '0.25rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  minWidth: '32px',
+                  minHeight: '32px',
+                  justifyContent: 'center',
+                  borderRadius: 'var(--radius-sm)',
+                  transition: 'var(--transition)',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          );
+        })}
       </div>
 
-      {/* 【３】個別リスト群の真下に「リスト追加」ボタンを移動。1つずつ増える仕様に変更 */}
+      {/* リスト追加ボタン */}
       <div style={{ display: 'flex', marginTop: '0.5rem', marginBottom: '0.75rem' }}>
         <button className="btn btn-outline btn-sm" onClick={addSingleItem} style={{ width: '100%' }}>
           <Plus size={16} /> リスト追加
         </button>
       </div>
 
-      {/* 【４】下部にあった新規用の time-grid ボタン群は削除 */}
-
+      {/* 下部アクションボタン */}
       <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', flexWrap: 'wrap' }}>
         <button className="btn btn-primary" onClick={handleSave} style={{ flex: 1 }}>
           <Save size={18} /> {initialEvent ? '更新' : '保存'}
