@@ -6,7 +6,6 @@ import { loadSettings } from '../types/settings';
 import { Check, Save, Plus, ArrowRight, Trash2, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 
-// 親のSaveコールバックが、単一のイベントだけでなく配列（複数イベント）も受け取れるように型を定義
 interface BatchEditorProps {
   onSave: (event: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update') => void;
   onCarryOver: (items: BatchItem[], timeOption: TimeOption) => void;
@@ -162,7 +161,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     return { start, end };
   };
 
-  // 1つのメモテキスト（文字列）を作成するヘルパー
   const buildMemoString = (targetItems: BatchItem[]) => {
     return stringifyBatchMemo(targetItems.map(i => ({
       ...i,
@@ -170,7 +168,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     })));
   };
 
-  // ── 【１】「☑□保存」ボタン：混在のまま元の時間に保存 ─────────────────────
   const handleSaveOriginalTime = () => {
     const validItems = items.filter(item => item.text.replace(/^[□☑\s]*/, '').trim() !== '');
     if (validItems.length === 0) return;
@@ -193,7 +190,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     cleanupEditor();
   };
 
-  // ── 【１】「☑更新□」ボタン：☑と□を分離して本日21時に登録 ─────────────────
   const handleUpdate21PMTime = () => {
     const validItems = items.filter(item => item.text.replace(/^[□☑\s]*/, '').trim() !== '');
     if (validItems.length === 0) return;
@@ -204,10 +200,8 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
 
     const eventsToSave: CalendarEvent[] = [];
 
-    // A. ☑したタスクがあれば「☑MEMO」としてまとめる
     if (checkedItems.length > 0) {
       eventsToSave.push({
-        // 元イベントがあり、かつ全体がチェック済みの場合は既存IDを再利用、それ以外は新規作成
         id: initialEvent && isTitleChecked && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-chkd`,
         title: '☑MEMO',
         start,
@@ -218,7 +212,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       });
     }
 
-    // B. □のままのタスクがあれば「□MEMO」としてまとめる
     if (uncheckedItems.length > 0) {
       eventsToSave.push({
         id: initialEvent && !isTitleChecked && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-unchkd`,
@@ -231,7 +224,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       });
     }
 
-    // 構築したイベント（1つまたは2つ）をまとめて親に引き渡す
     if (eventsToSave.length > 0) {
       onSave(eventsToSave, 'update');
     }
@@ -279,8 +271,20 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         />
       </div>
 
-      {/* 個別タスクリスト */}
-      <div className="batch-list" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginTop: '0.5rem' }}>
+      {/* 個別タスクリスト（エクセル格子状デザイン） */}
+      <div 
+        className="batch-list" 
+        style={{ 
+          display: 'flex',
+          flexDirection: column,
+          gap: 0, // 外枠の中の隙間をゼロに
+          border: '1px solid var(--border)', 
+          borderRadius: 'var(--radius-sm)', 
+          overflow: 'hidden', 
+          marginTop: '0.5rem',
+          backgroundColor: 'var(--border)' // 格子の線の色を背景色として利用
+        }}
+      >
         {items.map((item, index) => {
           const hasText = item.text.replace(/^[□☑\s]*/, '').trim() !== '';
           return (
@@ -289,26 +293,34 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
               className="input-group"
               style={{
                 marginBottom: 0,
-                gap: 0,
+                gap: 0, // 横方向の隙間をゼロに
                 borderTop: index === 0 ? 'none' : '1px solid var(--border)',
-                minHeight: 0,
+                backgroundColor: 'var(--surface)', // セルの背景色
+                display: 'flex',
+                alignItems: 'stretch'
               }}
             >
+              {/* チェックボタン（左側の独立したセル風） */}
               <button 
                 className={clsx('checkbox-btn', item.checked && 'checked')}
                 onClick={() => toggleCheck(item.id)}
                 style={{
                   flexShrink: 0,
-                  borderRadius: 0,
-                  borderRight: '1px solid var(--border)',
+                  borderRadius: 0, // 角丸をなくして四角に
+                  border: 'none', // 外枠と重複しないよう個別のボーダーを排除
+                  borderRight: '1px solid var(--border)', // 列の境界線
                   margin: 0,
-                  alignSelf: 'stretch',
-                  width: '36px',
-                  padding: '0',
+                  width: '40px',
+                  height: 'auto',
+                  minWidth: '40px',
+                  minHeight: '40px',
+                  background: item.checked ? 'var(--primary)' : 'transparent',
                 }}
               >
                 {item.checked && <Check size={16} />}
               </button>
+
+              {/* テキスト入力欄（中央のセル風） */}
               <input 
                 type="text" 
                 className="text-input"
@@ -318,33 +330,35 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                 style={{ 
                   textDecoration: (item.checked && hasText) ? 'line-through' : 'none', 
                   opacity: (item.checked && hasText) ? 0.6 : 1,
-                  borderRadius: 0,
-                  border: 'none',
+                  borderRadius: 0, // 角丸をなくして四角に
+                  border: 'none', // 個別のボーダーを排除
                   boxShadow: 'none',
                   flex: 1,
-                  paddingTop: '4px',
-                  paddingBottom: '4px',
+                  padding: '0.5rem 0.75rem',
+                  height: 'auto',
+                  minHeight: '40px',
+                  backgroundColor: 'transparent'
                 }}
               />
+
+              {/* 削除ボタン（外枠の右側に並ぶ） */}
               <button
                 onClick={() => deleteItem(item.id)}
                 title="削除"
                 style={{
                   background: 'transparent',
                   border: 'none',
-                  borderLeft: '1px solid var(--border)',
+                  borderLeft: '1px solid var(--border)', // 表の右端の境界線
                   cursor: 'pointer',
                   color: 'var(--text-muted)',
-                  padding: '0',
+                  padding: '0.25rem',
                   display: 'flex',
                   alignItems: 'center',
                   flexShrink: 0,
-                  minWidth: '32px',
-                  minHeight: 0,
+                  minWidth: '36px',
                   justifyContent: 'center',
                   borderRadius: 0,
                   transition: 'var(--transition)',
-                  alignSelf: 'stretch',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
@@ -363,10 +377,8 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
         </button>
       </div>
 
-      {/* 下部アクションボタンエリアの刷新 */}
+      {/* 下部アクションボタンエリア */}
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'nowrap' }}>
-        
-        {/* 【１】「☑□保存」ボタン */}
         <button 
           className="btn btn-primary" 
           onClick={handleSaveOriginalTime} 
@@ -375,7 +387,6 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
           <Save size={16} /> ☑□保存
         </button>
 
-        {/* 【１】「☑更新□」ボタン */}
         <button 
           className="btn btn-secondary" 
           onClick={handleUpdate21PMTime} 
