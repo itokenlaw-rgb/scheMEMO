@@ -106,14 +106,13 @@ function App() {
     }
   };
 
-  // BatchEditor（一括エディター）用の保存制御関数（単一・複数配列両対応）
+  // BatchEditor（一括エディター）用の保存制御関数
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[]) => {
     const eventsToSave = Array.isArray(input) ? input : [input];
 
     if (accessToken) {
       setIsLoading(true);
       try {
-        // 1. 元の予定がある場合、設定の削除選択に従ってクリーンアップ
         if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
           const isPast = new Date(selectedEvent.start) < new Date();
           const shouldDelete = isPast 
@@ -126,7 +125,6 @@ function App() {
           }
         }
 
-        // 2. 新しいイベント（群）をカレンダーへ保存
         for (const event of eventsToSave) {
           if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
             await updateGoogleEvent(accessToken, event);
@@ -142,7 +140,6 @@ function App() {
         setSelectedEvent(null);
       }
     } else {
-      // オフライン（Mock環境）の処理
       if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
         const isPast = new Date(selectedEvent.start) < new Date();
         const shouldDelete = isPast ? timeSettings.deletePastCompleted : timeSettings.deleteFutureCompleted;
@@ -226,28 +223,53 @@ function App() {
 
   return (
     <div className="app-container">
-      <header className="app-header">
-        <div className="header-title-area">
-          <CalendarIcon className="header-icon" size={28} />
-          <h1 className="header-title">scheMEMO</h1>
-          {isLoading && <RefreshCw className="animate-spin text-muted" size={18} />}
+      {/* ── 【元の綺麗なデザインヘッダーに復旧】 ── */}
+      <header className="app-header" style={{ padding: '0.75rem 1rem' }}>
+        <div className="app-logo" style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)', gap: '0.5rem' }}>
+          <CalendarIcon size={24} />
+          scheMEMO
         </div>
-        <div className="header-actions">
-          <button className="icon-btn" onClick={refreshEvents} title="同期" disabled={isLoading}>
-            <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          <button className="icon-btn" onClick={() => setShowSettings(true)} title="設定">
-            <Settings size={20} />
-          </button>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           {accessToken ? (
-            <button className="btn btn-outline btn-sm font-semibold" onClick={logout}>
-              <LogOut size={16} /> ログアウト
-            </button>
+            <>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={refreshEvents}
+                title="カレンダーを更新・同期"
+                style={{ padding: '0.4rem', minHeight: '34px' }}
+                disabled={isLoading}
+              >
+                <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
+              </button>
+              <button 
+                className="btn btn-outline btn-sm" 
+                onClick={logout} 
+                title="Googleカレンダーからログアウト" 
+                style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center', fontSize: '0.875rem' }}
+              >
+                <LogOut size={16} /> ログアウト
+              </button>
+            </>
           ) : (
-            <button className="btn btn-primary btn-sm font-semibold" onClick={() => login()}>
-              <LogIn size={16} /> Googleログイン
+            <button 
+              className="btn btn-primary btn-sm" 
+              onClick={() => login()} 
+              title="Googleカレンダーにログイン・連携" 
+              style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: '500' }}
+            >
+              <LogIn size={14} /> ログイン
             </button>
           )}
+
+          <button
+            className={`btn btn-outline btn-sm${showSettings ? ' btn-primary' : ''}`}
+            style={{ padding: '0.4rem', minHeight: '34px' }}
+            onClick={() => setShowSettings(v => !v)}
+            title="設定"
+          >
+            <Settings size={16} />
+          </button>
         </div>
       </header>
 
@@ -264,46 +286,103 @@ function App() {
         <SingleEditor onSave={handleSaveSingle} />
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', margin: '0.5rem 0' }}>
-          {/* 「□タスクを ↓ □MEMOにする」ボタン */}
+          {/* 1. 「□タスクを ↓ □MEMOにする」ボタン（元のトーンに馴染むよう再調整） */}
           <button
             className="btn btn-secondary"
             onClick={handleMergeWeeklyMemos}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '44px' }}
+            style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              gap: '0.5rem', 
+              minHeight: '42px',
+              backgroundColor: '#10b981', // 1枚目の綺麗なグリーンに合わせる
+              color: '#ffffff',
+              border: 'none',
+              borderRadius: '0.5rem',
+              fontWeight: '600',
+              fontSize: '0.95rem'
+            }}
             disabled={isLoading}
           >
             <Layers size={18} /> □タスクを ↓ □MEMOにする
           </button>
 
-          {/* 3列等幅・機能ボタンエリア */}
+          {/* 2. 3列等幅・機能ボタンエリア（スマホ幅で崩れないようフォントサイズとレイアウトを徹底最適化） */}
           <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
             <button
-              className="btn btn-outline btn-memo-action"
+              className="btn btn-outline"
               onClick={handleSelectOldestMemo}
               disabled={isLoading}
-              style={{ color: 'var(--text-main)', borderColor: 'var(--primary-light)', backgroundColor: 'rgba(79, 70, 229, 0.05)' }}
+              style={{ 
+                flex: 1, 
+                padding: '0.5rem 0.25rem', 
+                fontSize: '0.8rem', 
+                lineHeight: '1.2', 
+                borderRadius: '0.5rem', 
+                minHeight: '44px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderColor: '#e5e7eb',
+                backgroundColor: '#f3f4f6',
+                color: '#1f2937',
+                fontWeight: '600'
+              }}
             >
               <div>一番古い</div>
-              <div>□MEMO</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#6b7280' }}>□メモ</div>
             </button>
 
             <button
-              className="btn btn-outline btn-memo-action"
+              className="btn btn-outline"
               onClick={handleCollectAllMemos}
               disabled={isLoading}
-              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+              style={{ 
+                flex: 1, 
+                padding: '0.5rem 0.25rem', 
+                fontSize: '0.8rem', 
+                lineHeight: '1.2', 
+                borderRadius: '0.5rem', 
+                minHeight: '44px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderColor: '#f59e0b',
+                backgroundColor: '#ffffff',
+                color: '#d97706',
+                fontWeight: '600'
+              }}
             >
-              <div>□MEMOを</div>
-              <div>集める</div>
+              <div>□メモを</div>
+              <div style={{ fontSize: '0.8rem', color: '#d97706' }}>しよう</div>
             </button>
 
             <button
-              className="btn btn-outline btn-memo-action"
+              className="btn btn-outline"
               onClick={handleSelectLatestMemo}
               disabled={isLoading}
-              style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary-hover)' }}
+              style={{ 
+                flex: 1, 
+                padding: '0.5rem 0.25rem', 
+                fontSize: '0.8rem', 
+                lineHeight: '1.2', 
+                borderRadius: '0.5rem', 
+                minHeight: '44px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderColor: '#3b82f6',
+                backgroundColor: '#ffffff',
+                color: '#2563eb',
+                fontWeight: '600'
+              }}
             >
               <div>最新の</div>
-              <div>□MEMO</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#6b7280' }}>□メモ</div>
             </button>
           </div>
         </div>
