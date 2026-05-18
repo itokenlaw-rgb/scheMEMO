@@ -268,3 +268,59 @@ function App() {
             className="btn btn-secondary"
             onClick={handleMergeWeeklyMemos}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '44px' }}
+            disabled={isLoading}
+          >
+            <Layers size={18} /> □タスクを ↓ □MEMOにする
+          </button>
+
+          {/* 3列等幅・機能ボタンエリア */}
+          <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+            <button
+              className="btn btn-outline btn-memo-action"
+              onClick={handleSelectOldestMemo}
+              disabled={isLoading}
+              style={{ color: 'var(--text-main)', borderColor: 'var(--primary-light)', backgroundColor: 'rgba(79, 70, 229, 0.05)' }}
+            >
+              <div>一番古い</div>
+              <div>□MEMO</div>
+            </button>
+
+            <button
+              className="btn btn-outline btn-memo-action"
+              onClick={handleCollectAllMemos}
+              disabled={isLoading}
+              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+            >
+              <div>□MEMOを</div>
+              <div>集める</div>
+            </button>
+
+            <button
+              className="btn btn-outline btn-memo-action"
+              onClick={handleSelectLatestMemo}
+              disabled={isLoading}
+              style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary-hover)' }}
+            >
+              <div>最新の</div>
+              <div>□MEMO</div>
+            </button>
+          </div>
+        </div>
+
+        {/* 一括編集エディター */}
+        <BatchEditor
+          onSave={handleSaveBatch}
+          onCarryOver={handleCarryOver}
+          initialEvent={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+        />
+      </div>
+
+      <div className="calendar-section">
+        <CalendarView events={events} onSelectEvent={handleSelectEvent} />
+      </div>
+    </div>
+  );
+}
+
+export default App;
