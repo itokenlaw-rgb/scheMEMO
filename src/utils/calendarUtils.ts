@@ -76,8 +76,67 @@ export const getBatchTitlePrefix = (status: EventStatus): string => {
   }
 };
 
-export const extractMemosFromSettingsRange = (events: CalendarEvent[], _settings: any): CalendarEvent[] => {
-  return events.filter(e => e.isBatch);
+// □MEMOの抽出範囲（isBatch かつ status が unchecked）から対象イベントを返す
+export const extractUncheckedMemoEvents = (events: CalendarEvent[], settings: any): CalendarEvent[] => {
+  const before = settings?.mergeDaysBefore ?? 7;
+  const after = settings?.mergeDaysAfter ?? 7;
+  const now = new Date();
+  const rangeStart = startOfDay(subDays(now, before));
+  const rangeEnd = endOfDay(addDays(now, after));
+
+  return events
+    .filter(e => {
+      if (!e.isBatch) return false;
+      // タイトルが □ で始まる（未完了MEMO）のみ
+      if (!/^□/.test(e.title)) return false;
+      const d = new Date(e.start);
+      return d >= rangeStart && d <= rangeEnd;
+    })
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+};
+
+export const extractMemosFromSettingsRange = (events: CalendarEvent[], settings: any): CalendarEvent[] => {
+  return extractUncheckedMemoEvents(events, settings);
+};
+
+// 一番古い □MEMO を返す
+export const getOldestMemoEvent = (events: CalendarEvent[], settings: any): CalendarEvent | null => {
+  const memos = extractUncheckedMemoEvents(events, settings);
+  return memos.length > 0 ? memos[0] : null;
+};
+
+// 一番新しい □MEMO を返す
+export const getNewestMemoEvent = (events: CalendarEvent[], settings: any): CalendarEvent | null => {
+  const memos = extractUncheckedMemoEvents(events, settings);
+  return memos.length > 0 ? memos[memos.length - 1] : null;
+};
+
+// 範囲内の □MEMO をすべて1つに集約（☑タスクも含む、古い順に並べる）
+export const collectAllMemosInRange = (events: CalendarEvent[], settings: any): CalendarEvent => {
+  const memos = extractUncheckedMemoEvents(events, settings);
+
+  const allLines: string[] = [];
+  memos.forEach(event => {
+    if (event.memo) {
+      event.memo.split('\n')
+        .map((l: string) => l.trim())
+        .filter((l: string) => l.length > 0)
+        .forEach((l: string) => allLines.push(l));
+    }
+  });
+
+  const start = setHours(setMinutes(new Date(), 0), 21);
+  const end = setHours(setMinutes(new Date(), 0), 22);
+
+  return {
+    id: `evt-${Date.now()}-collected`,
+    title: '□MEMO',
+    start,
+    end,
+    memo: allLines.join('\n'),
+    status: 'unchecked',
+    isBatch: true,
+  };
 };
 
 export const consolidateWeeklyMemos = (events: CalendarEvent[], _before?: number, _after?: number): { mergedEvent: CalendarEvent; targetIds: string[] } => {
