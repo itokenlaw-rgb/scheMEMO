@@ -2,18 +2,14 @@
 import type { TimeOption } from '../types';
 import type { TimeSettings } from '../types/settings';
 import { loadSettings } from '../types/settings';
-import { startOfDay, addDays, endOfDay, addWeeks, addMonths } from 'date-fns'; // ✅ 不要なインポートを削除
+import { startOfDay, addDays, endOfDay, addWeeks, addMonths } from 'date-fns';
 
-function parseTime(t: string): { h: number; m: number } {
-  if (!t || !t.includes(':')) return { h: 9, m: 0 };
-  const [h, m] = t.split(':').map(Number);
-  return { h, m };
-}
-
-function withTime(date: Date, time: string): Date {
-  const d = new Date(date);
-  const { h, m } = parseTime(time);
-  d.setHours(h, m, 0, 0);
+/** 直近の土曜日（今日が土曜ならその日）を返す */
+function nextOrThisSaturday(from: Date): Date {
+  const d = new Date(from);
+  const dow = d.getDay(); // 0=日 … 6=土
+  const diff = dow === 6 ? 0 : 6 - dow;
+  d.setDate(d.getDate() + (diff === 0 ? 7 : diff)); // 今日が土曜なら翌週土曜
   return d;
 }
 
@@ -25,70 +21,41 @@ export function calculateEventTimeWithSettings(
 
   switch (option) {
     case 'today': {
-      const s = settings.today;
-      let start = new Date(now);
-      if (s.mode === 'relative') {
-        const offset = s.relativeMinutes ?? 60;
-        start = new Date(now.getTime() + offset * 60 * 1000);
-      } else {
-        start = withTime(now, s.fixedTime);
-      }
+      const start = new Date(now);
+      start.setHours(settings.quickMemoSaveHour, 0, 0, 0);
       return { start, end: endOfDay(now) };
     }
 
     case 'tonight': {
-      const s = settings.tonight;
-      return {
-        start: withTime(now, s.fixedTime),
-        end: endOfDay(now),
-      };
+      const start = new Date(now);
+      start.setHours(settings.preset2TodayHour, 0, 0, 0);
+      return { start, end: endOfDay(now) };
     }
 
     case 'tomorrow': {
-      const s = settings.tomorrow;
       const base = addDays(now, 1);
-      return {
-        start: withTime(base, s.fixedTime),
-        end: endOfDay(base),
-      };
+      const start = new Date(base);
+      start.setHours(settings.preset3TomorrowHour, 0, 0, 0);
+      return { start, end: endOfDay(base) };
     }
 
     case 'tomorrowNight': {
-      const s = settings.tomorrowNight;
       const base = addDays(now, 1);
-      return {
-        start: withTime(base, s.fixedTime),
-        end: endOfDay(base),
-      };
+      const start = new Date(base);
+      start.setHours(settings.preset4TomorrowNightHour, 0, 0, 0);
+      return { start, end: endOfDay(base) };
     }
 
     case 'weekend': {
-      const s = settings.weekend;
-      const targetDow = s.dow === '日' ? 0 : 6;
-      const d = new Date(now);
-      const diff = ((targetDow - d.getDay() + 7) % 7) || 7;
-      d.setDate(d.getDate() + diff);
-      return {
-        start: withTime(d, s.time),
-        end: endOfDay(d),
-      };
+      const sat = nextOrThisSaturday(now);
+      const start = new Date(sat);
+      start.setHours(settings.preset6SaturdayHour, 0, 0, 0);
+      return { start, end: endOfDay(sat) };
     }
 
     case 'endOfMonth': {
-      const s = settings.endOfMonth;
-      let target = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      if (s.mode === 'fixed') {
-        const day = Math.min(s.day, target.getDate());
-        target = new Date(now.getFullYear(), now.getMonth(), day);
-      } else if (s.mode === 'lastDow') {
-        const dows: Record<string, number> = { '日': 0, '月': 1, '火': 2, '水': 3, '木': 4, '金': 5, '土': 6 };
-        const targetDow = dows[s.dow] ?? 5;
-        const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-        const diff = (last.getDay() - targetDow + 7) % 7;
-        last.setDate(last.getDate() - diff);
-        target = last;
-      }
-      return { start: startOfDay(target), end: endOfDay(target) };
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { start: startOfDay(lastDay), end: endOfDay(lastDay) };
     }
 
     case 'nextWeek': {

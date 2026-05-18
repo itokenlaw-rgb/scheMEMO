@@ -30,7 +30,7 @@ const SectionDivider: React.FC = () => (
   }} />
 );
 
-const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const SectionTitle: React.FC<{ children: React.ReactNode; style?: React.CSSProperties }> = ({ children, style }) => (
   <div style={{
     fontSize: '0.85rem',
     fontWeight: 700,
@@ -40,6 +40,7 @@ const SectionTitle: React.FC<{ children: React.ReactNode }> = ({ children }) => 
     background: 'var(--background)',
     borderRadius: 'var(--radius-sm)',
     borderLeft: '3px solid var(--primary)',
+    ...style,
   }}>
     {children}
   </div>
