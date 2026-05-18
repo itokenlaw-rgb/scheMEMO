@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
@@ -86,7 +86,7 @@ function App() {
     setSelectedEvent(event);
   };
 
-  // 【エラー解消】SingleEditor（1行入力）用の保存制御関数
+  // SingleEditor（1行入力）用の保存制御関数
   const handleSaveSingle = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
@@ -202,10 +202,6 @@ function App() {
     }
   };
 
-  const handleMergeMemosClick = () => {
-    console.log('MEMOを編集 click');
-  };
-
   const handleSelectOldestMemo = () => {
     const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
     if (memoEvents.length === 0) return;
@@ -264,7 +260,7 @@ function App() {
       )}
 
       <div className="editors-section">
-        {/* 【１】１行クイック入力エディター */}
+        {/* １行クイック入力エディター */}
         <SingleEditor onSave={handleSaveSingle} />
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', margin: '0.5rem 0' }}>
@@ -272,62 +268,3 @@ function App() {
             className="btn btn-secondary"
             onClick={handleMergeWeeklyMemos}
             style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '44px' }}
-            disabled={isLoading}
-          >
-            <Layers size={18} /> □タスクを ↓ □MEMOにする
-          </button>
-
-          {/* 【２】3列等幅・機能ボタンエリア (🎨 カラーパレット修正済) */}
-          <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
-            <button
-              className="btn btn-outline btn-memo-action"
-              onClick={handleSelectOldestMemo}
-              disabled={isLoading}
-              /* 🎨 左：枠線をライトパープル、文字はメインテキスト色に */
-              style={{ color: 'var(--text-main)', borderColor: 'var(--primary-light)', backgroundColor: 'rgba(79, 70, 229, 0.05)' }}
-            >
-              <div>一番古い</div>
-              <div>□MEMO</div>
-            </button>
-
-            <button
-              className="btn btn-outline btn-memo-action"
-              onClick={handleCollectAllMemos}
-              disabled={isLoading}
-              /* 🎨 中央：鮮やかなオレンジ */
-              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
-            >
-              <div>□MEMOを</div>
-              <div>集める</div>
-            </button>
-
-            <button
-              className="btn btn-outline btn-memo-action"
-              onClick={handleSelectLatestMemo}
-              disabled={isLoading}
-              /* 🎨 右：キリッとした濃いパープル */
-              style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary-hover)' }}
-            >
-              <div>最新の</div>
-              <div>□MEMO</div>
-            </button>
-          </div>
-        </div>
-
-        {/* 【３】一括編集エディター（チェック混在 / ☑・□分離2ボタン仕様のイベントに対応） */}
-        <BatchEditor
-          onSave={handleSaveBatch}
-          onCarryOver={handleCarryOver}
-          initialEvent={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-        />
-      </div>
-
-      <div className="calendar-section">
-        <CalendarView events={events} onSelectEvent={handleSelectEvent} />
-      </div>
-    </div>
-  );
-}
-
-export default App;
