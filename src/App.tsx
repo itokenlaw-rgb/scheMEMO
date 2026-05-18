@@ -113,7 +113,6 @@ function App() {
     if (accessToken) {
       setIsLoading(true);
       try {
-        // 1. 元の予定がある場合、設定の削除選択に従ってクリーンアップ
         if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
           const isPast = new Date(selectedEvent.start) < new Date();
           const shouldDelete = isPast 
@@ -126,7 +125,6 @@ function App() {
           }
         }
 
-        // 2. 新しいイベント（群）をカレンダーへ保存
         for (const event of eventsToSave) {
           if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
             await updateGoogleEvent(accessToken, event);
@@ -142,7 +140,6 @@ function App() {
         setSelectedEvent(null);
       }
     } else {
-      // オフライン（Mock環境）の処理
       if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
         const isPast = new Date(selectedEvent.start) < new Date();
         const shouldDelete = isPast ? timeSettings.deletePastCompleted : timeSettings.deleteFutureCompleted;
@@ -202,6 +199,7 @@ function App() {
     }
   };
 
+  // 1枚目元のUIの「MEMOを編集」ボタンに相当するハンドラー
   const handleSelectOldestMemo = () => {
     const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
     if (memoEvents.length === 0) return;
@@ -211,43 +209,55 @@ function App() {
     setSelectedEvent(oldest);
   };
 
-  const handleCollectAllMemos = () => {
-    console.log('□MEMOを集める click');
-  };
-
-  const handleSelectLatestMemo = () => {
-    const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
-    if (memoEvents.length === 0) return;
-    const latest = memoEvents.reduce((lat, current) => 
-      new Date(current.start) > new Date(lat.start) ? current : lat
-    );
-    setSelectedEvent(latest);
-  };
-
   return (
     <div className="app-container">
+      {/* ── 【元のヘッダー構造に戻す】 ── */}
       <header className="app-header">
-        <div className="header-title-area">
-          <CalendarIcon className="header-icon" size={28} />
-          <h1 className="header-title">scheMEMO</h1>
-          {isLoading && <RefreshCw className="animate-spin text-muted" size={18} />}
+        <div className="app-logo">
+          <CalendarIcon size={24} />
+          scheMEMO
         </div>
-        <div className="header-actions">
-          <button className="icon-btn" onClick={refreshEvents} title="同期" disabled={isLoading}>
-            <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-          <button className="icon-btn" onClick={() => setShowSettings(true)} title="設定">
-            <Settings size={20} />
-          </button>
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           {accessToken ? (
-            <button className="btn btn-outline btn-sm font-semibold" onClick={logout}>
-              <LogOut size={16} /> ログアウト
-            </button>
+            <>
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={refreshEvents}
+                title="カレンダーを更新・同期"
+                style={{ padding: '0.4rem', minHeight: '34px' }}
+                disabled={isLoading}
+              >
+                <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
+              </button>
+              <button 
+                className="btn btn-outline btn-sm" 
+                onClick={logout} 
+                title="Googleカレンダーからログアウト" 
+                style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
+              >
+                <LogOut size={16} /> ログアウト
+              </button>
+            </>
           ) : (
-            <button className="btn btn-primary btn-sm font-semibold" onClick={() => login()}>
-              <LogIn size={16} /> Googleログイン
+            <button 
+              className="btn btn-primary btn-sm" 
+              onClick={() => login()} 
+              title="Googleカレンダーにログイン・連携" 
+              style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
+            >
+              <LogIn size={14} /> ログイン
             </button>
           )}
+
+          <button
+            className={`btn btn-outline btn-sm${showSettings ? ' btn-primary' : ''}`}
+            style={{ padding: '0.4rem', minHeight: '34px' }}
+            onClick={() => setShowSettings(v => !v)}
+            title="設定"
+          >
+            <Settings size={16} />
+          </button>
         </div>
       </header>
 
@@ -260,51 +270,27 @@ function App() {
       )}
 
       <div className="editors-section">
-        {/* １行クイック入力エディター */}
+        {/* クイックメモ（1行入力エディター） */}
         <SingleEditor onSave={handleSaveSingle} />
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', margin: '0.5rem 0' }}>
+        {/* ── 【元の2列等幅・綺麗に収まるボタンエリアに戻す】 ── */}
+        <div style={{ display: 'flex', gap: '1rem', width: '100%', margin: '0.5rem 0' }}>
           <button
             className="btn btn-secondary"
             onClick={handleMergeWeeklyMemos}
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '44px' }}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px' }}
             disabled={isLoading}
           >
-            <Layers size={18} /> □タスクを ↓ □MEMOにする
+            <Layers size={18} /> タスクをまとめる
           </button>
 
-          {/* 3列等幅・機能ボタンエリア */}
-          <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
-            <button
-              className="btn btn-outline btn-memo-action"
-              onClick={handleSelectOldestMemo}
-              disabled={isLoading}
-              style={{ color: 'var(--text-main)', borderColor: 'var(--primary-light)', backgroundColor: 'rgba(79, 70, 229, 0.05)' }}
-            >
-              <div>一番古い</div>
-              <div>□MEMO</div>
-            </button>
-
-            <button
-              className="btn btn-outline btn-memo-action"
-              onClick={handleCollectAllMemos}
-              disabled={isLoading}
-              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
-            >
-              <div>□MEMOを</div>
-              <div>集める</div>
-            </button>
-
-            <button
-              className="btn btn-outline btn-memo-action"
-              onClick={handleSelectLatestMemo}
-              disabled={isLoading}
-              style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary-hover)' }}
-            >
-              <div>最新の</div>
-              <div>□MEMO</div>
-            </button>
-          </div>
+          <button
+            className="btn btn-outline"
+            onClick={handleSelectOldestMemo}
+            style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px', color: 'var(--accent)', borderColor: 'var(--accent)' }}
+          >
+            <Layers size={18} /> MEMOを編集
+          </button>
         </div>
 
         {/* 一括編集エディター */}
