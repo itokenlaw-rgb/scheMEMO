@@ -86,7 +86,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     // 2. 【変更】日付のマス(背景セル)または日付の枠組みの中だけで反応するように限定
     // .rbc-day-bg = 日付マスの背景
     // .rbc-date-cell = 日付の数字部分
-    const isDayCell = target.closest('.rbc-day-bg') || target.closest('.rbc-date-cell');
+    const isDayCell = target.closest('.rbc-date-cell');
     
     if (!isDayCell) {
       return; // 日付マス以外（外側の余白やヘッダーなど全般）なら何もしない
