@@ -5,9 +5,9 @@ import { stringifyBatchMemo } from '../utils/calendarUtils';
 import { Check, Save, Plus, ArrowRight, Trash2, RefreshCw } from 'lucide-react';
 import clsx from 'clsx';
 
-// 親のSaveコールバックに、強制削除フラグを渡せるようにインターフェースを拡張
+// 親のSaveコールバックが、単一のイベントだけでなく配列（複数イベント）も受け取れるように型を定義
 interface BatchEditorProps {
-  onSave: (event: CalendarEvent, options?: { forceDeleteOriginal?: boolean }) => void;
+  onSave: (event: CalendarEvent | CalendarEvent[]) => void;
   onCarryOver: (items: BatchItem[], timeOption: TimeOption) => void;
   initialEvent: CalendarEvent | null;
   onClose: () => void;
@@ -160,27 +160,25 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     return { start, end };
   };
 
-  // 共通の共通メモテキストテキスト成
-  const buildMemoContent = (validItems: BatchItem[]) => {
-    return stringifyBatchMemo(validItems.map(i => ({
+  // 1つのメモテキスト（文字列）を作成するヘルパー
+  const buildMemoString = (targetItems: BatchItem[]) => {
+    return stringifyBatchMemo(targetItems.map(i => ({
       ...i,
       text: `${i.checked ? '☑' : '□'} ${i.text.replace(/^[□☑\s]*/, '').trim()}`
     })));
   };
 
-  // ── 【１】「☑□保存」ボタンのアクション ─────────────────────────────────
+  // ── 【１】「☑□保存」ボタン：混在のまま元の時間に保存 ─────────────────────
   const handleSaveOriginalTime = () => {
     const validItems = items.filter(item => item.text.replace(/^[□☑\s]*/, '').trim() !== '');
     if (validItems.length === 0) return;
 
-    // 元の予定の時間を使う（無い場合は現在の時間をフォールバック）
     const start = initialEvent ? new Date(initialEvent.start) : new Date();
     const end = initialEvent ? new Date(initialEvent.end) : new Date(Date.now() + 60 * 60 * 1000);
 
-    const memo = buildMemoContent(validItems);
+    const memo = buildMemoString(validItems);
 
     onSave({
-      // 既存編集ならID維持、まとめイベント等の仮IDなら新規ID
       id: initialEvent && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-saved`,
       title: memoTitle,
       start,
@@ -188,29 +186,53 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       memo,
       status: isTitleChecked ? 'checked' : 'unchecked',
       isBatch: true
-    }, { forceDeleteOriginal: true }); // ← 元予定を（設定に関わらず）強制削除する指示フラグ
+    });
 
     cleanupEditor();
   };
 
-  // ── 【１】「☑更新□」ボタンのアクション ─────────────────────────────────
+  // ── 【１】「☑更新□」ボタン：☑と□を分離して本日21時に登録 ─────────────────
   const handleUpdate21PMTime = () => {
     const validItems = items.filter(item => item.text.replace(/^[□☑\s]*/, '').trim() !== '');
     if (validItems.length === 0) return;
 
-    // 実行した日（今日）の21時に時間を変更
     const { start, end } = get21PMTime(new Date());
-    const memo = buildMemoContent(validItems);
+    const checkedItems = validItems.filter(i => i.checked);
+    const uncheckedItems = validItems.filter(i => !i.checked);
 
-    onSave({
-      id: initialEvent && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-updated`,
-      title: memoTitle,
-      start,
-      end,
-      memo,
-      status: isTitleChecked ? 'checked' : 'unchecked',
-      isBatch: true
-    }, { forceDeleteOriginal: false }); // ← 設定のクリーンアップ選択に従う
+    const eventsToSave: CalendarEvent[] = [];
+
+    // A. ☑したタスクがあれば「☑MEMO」としてまとめる
+    if (checkedItems.length > 0) {
+      eventsToSave.push({
+        // 元イベントがあり、かつ全体がチェック済みの場合は既存IDを再利用、それ以外は新規作成
+        id: initialEvent && isTitleChecked && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-chkd`,
+        title: '☑MEMO',
+        start,
+        end,
+        memo: buildMemoString(checkedItems),
+        status: 'checked',
+        isBatch: true
+      });
+    }
+
+    // B. □のままのタスクがあれば「□MEMO」としてまとめる
+    if (uncheckedItems.length > 0) {
+      eventsToSave.push({
+        id: initialEvent && !isTitleChecked && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-unchkd`,
+        title: '□MEMO',
+        start,
+        end,
+        memo: buildMemoString(uncheckedItems),
+        status: 'unchecked',
+        isBatch: true
+      });
+    }
+
+    // 構築したイベント（1つまたは2つ）をまとめて親に引き渡す
+    if (eventsToSave.length > 0) {
+      onSave(eventsToSave);
+    }
 
     cleanupEditor();
   };
@@ -226,7 +248,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
     if (uncheckedItems.length > 0) {
       onCarryOver(uncheckedItems, carryOverTime);
     }
-    handleUpdate21PMTime(); // 持ち越し時は21時更新をトリガー
+    handleUpdate21PMTime();
   };
 
   return (
@@ -336,7 +358,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
 
         {initialEvent && (
           <button className="btn btn-outline" onClick={onClose} style={{ minHeight: '44px' }}>
-            解
+            キャンセル
           </button>
         )}
       </div>

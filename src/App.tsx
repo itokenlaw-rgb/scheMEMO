@@ -219,48 +219,37 @@ function App() {
     setSelectedEvent(collectedEvent);
   };
 
-  const handleSaveSingle = async (event: CalendarEvent) => {
-    if (accessToken) {
-      setIsLoading(true);
-      try {
-        const savedGoogleEvent = await createGoogleEvent(accessToken, event);
-        setEvents(prev => [...prev, savedGoogleEvent]);
-        await refreshEvents();
-      } catch (error) {
-        console.error(error);
-        await refreshEvents();
-      } finally {
-        setIsLoading(false);
-      }
-    } else {
-      addMockEvent(event);
-      setEvents(getMockEvents());
-    }
-  };
-
-  const handleSaveBatch = async (event: CalendarEvent, options?: { forceDeleteOriginal?: boolean }) => {
-    const forceDelete = options?.forceDeleteOriginal ?? false;
+  const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[]) => {
+    // 降ってきたデータが単一オブジェクトなら配列にラップして共通ループ処理にする
+    const eventsToSave = Array.isArray(input) ? input : [input];
 
     if (accessToken) {
       setIsLoading(true);
       try {
-        // 1. 強制削除フラグが立っている、または設定の削除条件に合致する場合の元予定クリーンアップ処理
+        // 1. 元の古い予定がある場合、設定の「抽出統合完了タスクの設定」に従って削除を判定
         if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
-          if (forceDelete) {
-            // 「☑□保存」時は無条件で古いイベントを削除
+          const isPast = new Date(selectedEvent.start) < new Date();
+          const shouldDelete = isPast 
+            ? timeSettings.deletePastCompleted 
+            : timeSettings.deleteFutureCompleted;
+
+          // 今回の新しいイベント群のなかに、元の古いIDを再利用しているものが「含まれない」かつ、設定で削除条件に該当する場合に消去
+          const idReused = eventsToSave.some(e => e.id === selectedEvent.id);
+          if (shouldDelete && !idReused) {
             await deleteGoogleEvent(accessToken, selectedEvent.id).catch(err => console.error(err));
-          } else {
-            // 「☑更新□」時は設定パネルの「deletePastCompleted / deleteFutureCompleted」などの条件をみて削除を判定
-            // (既存の条件判定ロジックがあればここに適用)
           }
         }
 
-        // 2. 新規状態としてカレンダーへPOST保存、またはPUT更新
-        if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-') && !forceDelete) {
-          await updateGoogleEvent(accessToken, event);
-        } else {
-          await createGoogleEvent(accessToken, event);
+        // 2. 構築されたイベント群をループでGoogleカレンダーに保存
+        for (const event of eventsToSave) {
+          // 元のイベントIDと一致し、かつ仮IDでなければ上書き(PUT)、それ以外は新規作成(POST)
+          if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
+            await updateGoogleEvent(accessToken, event);
+          } else {
+            await createGoogleEvent(accessToken, event);
+          }
         }
+
         await refreshEvents();
       } catch (error) {
         console.error(error);
@@ -269,13 +258,23 @@ function App() {
         setSelectedEvent(null);
       }
     } else {
-      // オフライン（Mock環境）の処理
-      if (selectedEvent && event.id === selectedEvent.id && !forceDelete) {
-        updateMockEvent(event);
-      } else {
-        if (selectedEvent && forceDelete) deleteMockEvent(selectedEvent.id);
-        addMockEvent(event);
+      // オフライン（Mock）用の処理
+      if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
+        const isPast = new Date(selectedEvent.start) < new Date();
+        const shouldDelete = isPast ? timeSettings.deletePastCompleted : timeSettings.deleteFutureCompleted;
+        
+        const idReused = eventsToSave.some(e => e.id === selectedEvent.id);
+        if (shouldDelete && !idReused) deleteMockEvent(selectedEvent.id);
       }
+
+      eventsToSave.forEach(event => {
+        if (selectedEvent && event.id === selectedEvent.id) {
+          updateMockEvent(event);
+        } else {
+          addMockEvent(event);
+        }
+      });
+
       setEvents(getMockEvents());
       setSelectedEvent(null);
     }
