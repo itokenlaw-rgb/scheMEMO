@@ -8,9 +8,10 @@ import { SettingsPanel } from './components/SettingsPanel';
 import type { CalendarEvent, BatchItem } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
+// 修正後
 import {
   getMockEvents, addMockEvent, updateMockEvent,
-  extractMemosFromSettingsRange, deleteMockEvent, consolidateWeeklyMemos
+  deleteMockEvent, consolidateWeeklyMemos
 } from './utils/calendarUtils';
 import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
 import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
