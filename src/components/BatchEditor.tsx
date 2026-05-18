@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { CalendarEvent, TimeOption, BatchItem } from '../types';
 import { stringifyBatchMemo } from '../utils/calendarUtils';
 import { loadSettings } from '../types/settings';
-import { Check, Plus, Trash2 } from 'lucide-react'; // 不要になったSave, ArrowRight, RefreshCwを削除
+import { Check, Plus, Trash2 } from 'lucide-react'; 
 import clsx from 'clsx';
 
 interface BatchEditorProps {
@@ -13,7 +13,8 @@ interface BatchEditorProps {
   onClose: () => void;
 }
 
-export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, initialEvent, onClose }) => {
+// 【修正】使われていない onCarryOver の前にアンダースコア（_）を付与して、コンパイルエラーを回避します
+export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver: _onCarryOver, initialEvent, onClose }) => {
   const [items, setItems] = useState<BatchItem[]>([]);
   const [memoTitle, setMemoTitle] = useState('□MEMO');
   const [isTitleChecked, setIsTitleChecked] = useState(false);
