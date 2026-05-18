@@ -1,5 +1,5 @@
 // src/App.tsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGoogleLogin } from '@react-oauth/google';
 import { CalendarView } from './components/CalendarView';
 import { SingleEditor } from './components/SingleEditor';
@@ -8,12 +8,17 @@ import { SettingsPanel } from './components/SettingsPanel';
 import type { CalendarEvent, BatchItem } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
-import { 
-  getMockEvents, addMockEvent, updateMockEvent, 
+import {
+  getMockEvents, addMockEvent, updateMockEvent,
   extractMemosFromSettingsRange, deleteMockEvent, consolidateWeeklyMemos
 } from './utils/calendarUtils';
 import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
 import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
+
+// アクセストークンの有効期限（Google は 3600 秒 = 1時間）
+const TOKEN_LIFETIME_MS = 55 * 60 * 1000; // 55分後に再取得（余裕を持たせる）
+const STORAGE_KEY_TOKEN = 'google_access_token';
+const STORAGE_KEY_EXPIRY = 'google_token_expiry';
 
 function App() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
@@ -23,68 +28,125 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  const login = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      setAccessToken(tokenResponse.access_token);
-      localStorage.setItem('google_access_token', tokenResponse.access_token);
-    },
-    scope: 'https://www.googleapis.com/auth/calendar.events',
-    onError: (error) => console.log('Login Failed:', error),
-  });
+  // サイレント更新用タイマーの参照
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const logout = () => {
+  /**
+   * トークンを保存し、有効期限も記録する。
+   * また TOKEN_LIFETIME_MS 後に自動でサイレント再取得をスケジュールする。
+   */
+  const persistToken = useCallback((token: string) => {
+    const expiry = Date.now() + TOKEN_LIFETIME_MS;
+    localStorage.setItem(STORAGE_KEY_TOKEN, token);
+    localStorage.setItem(STORAGE_KEY_EXPIRY, String(expiry));
+    setAccessToken(token);
+
+    // 既存タイマーをリセット
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => {
+      // サイレント再ログイン（prompt なし）
+      silentLogin();
+    }, TOKEN_LIFETIME_MS);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const clearToken = useCallback(() => {
+    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_EXPIRY);
     setAccessToken(null);
-    localStorage.removeItem('google_access_token');
-    setEvents(getMockEvents());
-  };
-
-  useEffect(() => {
-    const token = localStorage.getItem('google_access_token');
-    if (token) setAccessToken(token);
-    else setEvents(getMockEvents());
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
   }, []);
 
+  // ── 通常ログイン ──────────────────────────────────────────────────────────────
+  const login = useGoogleLogin({
+    onSuccess: (tokenResponse) => persistToken(tokenResponse.access_token),
+    scope: 'https://www.googleapis.com/auth/calendar.events',
+    onError: (error) => console.error('Login Failed:', error),
+  });
+
+  // ── サイレント再取得（prompt: 'none' で画面を出さずに更新） ─────────────────
+  const silentLogin = useGoogleLogin({
+    onSuccess: (tokenResponse) => persistToken(tokenResponse.access_token),
+    scope: 'https://www.googleapis.com/auth/calendar.events',
+    prompt: 'none',          // ← ポイント：認証画面を出さない
+    onError: () => {
+      // サイレント取得に失敗した場合はトークンを破棄してログアウト扱い
+      console.warn('サイレント更新に失敗しました。再ログインが必要です。');
+      clearToken();
+      setEvents(getMockEvents());
+    },
+  });
+
+  const logout = useCallback(() => {
+    clearToken();
+    setEvents(getMockEvents());
+  }, [clearToken]);
+
+  // ── 起動時：保存済みトークンの復元 ───────────────────────────────────────────
+  useEffect(() => {
+    const token = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const expiry = Number(localStorage.getItem(STORAGE_KEY_EXPIRY) || '0');
+
+    if (token && expiry > Date.now()) {
+      // まだ有効 → そのまま使う＋残り時間でタイマーセット
+      const remaining = expiry - Date.now();
+      setAccessToken(token);
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(() => silentLogin(), remaining);
+    } else if (token) {
+      // 期限切れ → サイレント更新を試みる
+      clearToken();
+      silentLogin();
+    } else {
+      // 未ログイン
+      setEvents(getMockEvents());
+    }
+
+    return () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Google カレンダー初回読み込み ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!accessToken) return;
+    (async () => {
+      try {
+        setIsLoading(true);
+        const fetchedEvents = await fetchGoogleEvents(accessToken);
+        setEvents(fetchedEvents);
+      } catch (error) {
+        console.error(error);
+        if ((error as any).message?.includes('401')) {
+          clearToken();
+          silentLogin();
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+  }, [accessToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 手動同期 ──────────────────────────────────────────────────────────────────
   const refreshEvents = useCallback(async () => {
     if (!accessToken) return;
     setIsLoading(true);
-
     try {
       const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
-      if (unSyncedEvents.length > 0) {
-        for (const event of unSyncedEvents) {
-          try {
-            await createGoogleEvent(accessToken, event);
-          } catch (err) {
-            console.error(`失敗しました:`, err);
-          }
-        }
+      for (const event of unSyncedEvents) {
+        await createGoogleEvent(accessToken, event).catch(err => console.error('失敗:', err));
       }
       const fetchedEvents = await fetchGoogleEvents(accessToken);
       setEvents(fetchedEvents);
     } catch (error) {
       console.error('同期エラー:', error);
-      if ((error as any).message?.includes('401')) logout();
+      if ((error as any).message?.includes('401')) {
+        clearToken();
+        silentLogin();
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, events]);
-
-  useEffect(() => {
-    if (accessToken) {
-      const loadFirstTime = async () => {
-        try {
-          setIsLoading(true);
-          const fetchedEvents = await fetchGoogleEvents(accessToken);
-          setEvents(fetchedEvents);
-        } catch (error) {
-          console.error(error);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      loadFirstTime();
-    }
-  }, [accessToken]);
+  }, [accessToken, events]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSaveSettings = (newSettings: TimeSettings) => {
     setTimeSettings(newSettings);
@@ -118,12 +180,10 @@ function App() {
     }
   };
 
-  // ── 【５】バッチ保存 ────────────────────────────────────────────────────────────
   const handleSaveBatch = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
       try {
-        // 仮IDでない既存ID、かつ今回更新対象のIDが完全に一致する場合のみ既存上書き、それ以外は新規作成
         if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
           await updateGoogleEvent(accessToken, event);
         } else {
@@ -148,11 +208,8 @@ function App() {
   };
 
   const handleCarryOver = async (items: BatchItem[]) => {
-    const today21 = new Date();
-    today21.setHours(21, 0, 0, 0);
-    const today22 = new Date();
-    today22.setHours(22, 0, 0, 0);
-
+    const today21 = new Date(); today21.setHours(21, 0, 0, 0);
+    const today22 = new Date(); today22.setHours(22, 0, 0, 0);
     const newEvent: CalendarEvent = {
       id: `evt-${Date.now()}-carry`,
       title: '□MEMO',
@@ -192,8 +249,7 @@ function App() {
       return;
     }
 
-    const confirmMerge = window.confirm(`未完了メモが ${targetIds.length} 件見つかりました。本日21時の『□ MEMO』に1つにまとめますか？`);
-    if (!confirmMerge) return;
+    if (!window.confirm(`未完了メモが ${targetIds.length} 件見つかりました。本日21時の『□ MEMO』に1つにまとめますか？`)) return;
 
     setIsLoading(true);
     try {
@@ -226,7 +282,7 @@ function App() {
           <CalendarIcon size={24} />
           scheMEMO
         </div>
-        
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           {accessToken ? (
             <>
@@ -239,20 +295,20 @@ function App() {
               >
                 <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
               </button>
-              <button 
-                className="btn btn-outline btn-sm" 
-                onClick={logout} 
-                title="Googleカレンダーからログアウト" 
+              <button
+                className="btn btn-outline btn-sm"
+                onClick={logout}
+                title="Googleカレンダーからログアウト"
                 style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
               >
                 <LogOut size={16} /> ログアウト
               </button>
             </>
           ) : (
-            <button 
-              className="btn btn-primary btn-sm" 
-              onClick={() => login()} 
-              title="Googleカレンダーにログイン・連携" 
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => login()}
+              title="Googleカレンダーにログイン・連携"
               style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
             >
               <LogIn size={14} /> ログイン
@@ -280,7 +336,7 @@ function App() {
 
       <div className="editors-section">
         <SingleEditor onSave={handleSaveSingle} />
-        
+
         <div style={{ display: 'flex', gap: '1rem', width: '100%', margin: '0.5rem 0' }}>
           <button
             className="btn btn-secondary"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import type { CalendarEvent, TimeOption } from '../types';
 import { calculateEventTime } from '../utils/calendarUtils';
 import { Save } from 'lucide-react';
@@ -8,38 +8,39 @@ interface SingleEditorProps {
   defaultTime?: TimeOption;
 }
 
+/** input を □ の直後にフォーカス・カーソル配置するヘルパー */
+function focusAfterCheckbox(el: HTMLInputElement | null) {
+  if (!el) return;
+  el.focus();
+  // □ は1文字だが、念のため value から長さを取る
+  const pos = el.value.length;
+  el.setSelectionRange(pos, pos);
+}
+
 export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime = 'today' }) => {
-  // 【２】3つの入力欄の状態を個別に管理
   const [text1, setText1] = useState('□');
   const [text2, setText2] = useState('□');
   const [text3, setText3] = useState('□');
-  
-  // 【４】将来的な利用や裏側の時間設定保持のため、selectedTime の状態は内部的に残します
   const [selectedTime] = useState<TimeOption>(defaultTime);
-  
-  // 最初の入力欄へのオートフォーカス用Ref
+
   const inputRef1 = useRef<HTMLInputElement>(null);
 
-  // 画面起動時に「□」の直後にカーソルを当てる
+  // 【修正】StrictMode の二重 effect に対応するため setTimeout を使う
   useEffect(() => {
-    if (inputRef1.current) {
-      inputRef1.current.focus();
-      const length = inputRef1.current.value.length;
-      inputRef1.current.setSelectionRange(length, length);
-    }
+    const id = setTimeout(() => focusAfterCheckbox(inputRef1.current), 0);
+    return () => clearTimeout(id);
   }, []);
 
-  // 各入力欄ごとの保存処理
-  const handleSaveField = (
-    text: string, 
-    setText: React.Dispatch<React.SetStateAction<string>>, 
+  const handleSaveField = useCallback((
+    text: string,
+    setText: React.Dispatch<React.SetStateAction<string>>,
     inputRef?: React.RefObject<HTMLInputElement | null>
   ) => {
     const trimmed = text.replace(/^[□☑]\s*/, '').trim();
     if (!trimmed) return;
-    
+
     const { start, end } = calculateEventTime(selectedTime);
-    
+
     const newEvent: CalendarEvent = {
       id: `evt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       title: `□ ${trimmed}`,
@@ -47,23 +48,17 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
       end,
       memo: '',
       status: 'unchecked',
-      isBatch: false
+      isBatch: false,
     };
-    
-    onSave(newEvent);
-    setText('□'); // 保存後に「□」に戻す
 
-    // 保存後に同じ場所へフォーカスを当て直す
-    if (inputRef && inputRef.current) {
-      setTimeout(() => {
-        if (inputRef.current) {
-          inputRef.current.focus();
-          const length = inputRef.current.value.length;
-          inputRef.current.setSelectionRange(length, length);
-        }
-      }, 50);
+    onSave(newEvent);
+    setText('□');
+
+    if (inputRef) {
+      // setState の反映後にカーソルを戻す
+      setTimeout(() => focusAfterCheckbox(inputRef.current), 0);
     }
-  };
+  }, [selectedTime, onSave]);
 
   return (
     <div className="card single-editor" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
@@ -71,10 +66,9 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
 
       {/* 入力欄 1 */}
       <div className="input-group" style={{ marginBottom: 0 }}>
-        {/* 【３】左側のチェックボックス用ボタンを削除しました */}
-        <input 
+        <input
           ref={inputRef1}
-          type="text" 
+          type="text"
           className="text-input"
           placeholder="□やること 1"
           value={text1}
@@ -88,8 +82,8 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
 
       {/* 入力欄 2 */}
       <div className="input-group" style={{ marginBottom: 0 }}>
-        <input 
-          type="text" 
+        <input
+          type="text"
           className="text-input"
           placeholder="□やること 2"
           value={text2}
@@ -103,8 +97,8 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
 
       {/* 入力欄 3 */}
       <div className="input-group" style={{ marginBottom: 0 }}>
-        <input 
-          type="text" 
+        <input
+          type="text"
           className="text-input"
           placeholder="□やること 3"
           value={text3}
@@ -115,8 +109,6 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave, defaultTime 
           <Save size={18} /> 保存
         </button>
       </div>
-
-      {/* 【４】下部にあった time-grid（今日中などのボタン表示）を丸ごと削除しました */}
     </div>
   );
 };
