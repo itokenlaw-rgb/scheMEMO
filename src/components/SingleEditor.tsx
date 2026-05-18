@@ -29,7 +29,7 @@ function nextOrThisSaturday(from: Date): Date {
 /** 設定値をもとにプリセット選択肢のラベルを生成 */
 function buildPresets(s: TimeSettings) {
   return [
-    { label: '指定なし', value: 'default' },
+    { label: '-時間指定保存-', value: 'default' },
     { label: `${s.preset1HoursLater}時間後`, value: 'p1' },
     { label: `今日の ${s.preset2TodayHour}時`, value: 'p2' },
     { label: `明日の ${s.preset3TomorrowHour}時`, value: 'p3' },

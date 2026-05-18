@@ -280,14 +280,30 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
       </div>
 
       {/* 個別タスクリスト */}
-      <div className="batch-list">
-        {items.map(item => {
+      <div className="batch-list" style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', marginTop: '0.5rem' }}>
+        {items.map((item, index) => {
           const hasText = item.text.replace(/^[□☑\s]*/, '').trim() !== '';
           return (
-            <div key={item.id} className="input-group" style={{ marginBottom: 0 }}>
+            <div
+              key={item.id}
+              className="input-group"
+              style={{
+                marginBottom: 0,
+                gap: 0,
+                borderTop: index === 0 ? 'none' : '1px solid var(--border)',
+              }}
+            >
               <button 
                 className={clsx('checkbox-btn', item.checked && 'checked')}
                 onClick={() => toggleCheck(item.id)}
+                style={{
+                  flexShrink: 0,
+                  borderRadius: 0,
+                  borderRight: '1px solid var(--border)',
+                  margin: 0,
+                  alignSelf: 'stretch',
+                  width: '36px',
+                }}
               >
                 {item.checked && <Check size={16} />}
               </button>
@@ -299,7 +315,11 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                 placeholder="□　やること"
                 style={{ 
                   textDecoration: (item.checked && hasText) ? 'line-through' : 'none', 
-                  opacity: (item.checked && hasText) ? 0.6 : 1 
+                  opacity: (item.checked && hasText) ? 0.6 : 1,
+                  borderRadius: 0,
+                  border: 'none',
+                  boxShadow: 'none',
+                  flex: 1,
                 }}
               />
               <button
@@ -308,6 +328,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                 style={{
                   background: 'transparent',
                   border: 'none',
+                  borderLeft: '1px solid var(--border)',
                   cursor: 'pointer',
                   color: 'var(--text-muted)',
                   padding: '0.25rem',
@@ -317,8 +338,9 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                   minWidth: '32px',
                   minHeight: '32px',
                   justifyContent: 'center',
-                  borderRadius: 'var(--radius-sm)',
+                  borderRadius: 0,
                   transition: 'var(--transition)',
+                  alignSelf: 'stretch',
                 }}
                 onMouseEnter={e => (e.currentTarget.style.color = 'var(--danger)')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
