@@ -408,12 +408,14 @@ function App() {
             <Layers size={18} /> □タスクを ↓ □MEMOにする
           </button>
 
-          {/* 【２】3列等幅・2行縦並び表示の機能ボタン */}
+{/* 【２】3列等幅・2行縦並び表示の機能ボタン */}
           <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
             <button
               className="btn btn-outline btn-memo-action"
               onClick={handleSelectOldestMemo}
               disabled={isLoading}
+              /* 🎨 左：枠線をライトパープル、文字は視認性重視でメインテキスト色に */
+              style={{ color: 'var(--text-main)', borderColor: 'var(--primary-light)', backgroundColor: 'rgba(79, 70, 229, 0.05)' }}
             >
               <div>一番古い</div>
               <div>□MEMO</div>
@@ -423,6 +425,7 @@ function App() {
               className="btn btn-outline btn-memo-action"
               onClick={handleCollectAllMemos}
               disabled={isLoading}
+              /* 🎨 中央：鮮やかなオレンジ */
               style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
             >
               <div>□MEMOを</div>
@@ -433,6 +436,8 @@ function App() {
               className="btn btn-outline btn-memo-action"
               onClick={handleSelectLatestMemo}
               disabled={isLoading}
+              /* 🎨 右：キリッとした濃いパープル */
+              style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary-hover)' }}
             >
               <div>最新の</div>
               <div>□MEMO</div>
