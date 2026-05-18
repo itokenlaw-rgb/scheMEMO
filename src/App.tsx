@@ -8,7 +8,6 @@ import { SettingsPanel } from './components/SettingsPanel';
 import type { CalendarEvent, BatchItem } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
-// 修正後
 import {
   getMockEvents, addMockEvent, updateMockEvent,
   deleteMockEvent, consolidateWeeklyMemos
@@ -29,227 +28,112 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  // サイレント更新用タイマーの参照
-  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ローカルストレージからトークンを復旧する処理
+  useEffect(() => {
+    const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
+    const expiryStr = localStorage.getItem(STORAGE_KEY_EXPIRY);
 
-  /**
-   * トークンを保存し、有効期限も記録する。
-   * また TOKEN_LIFETIME_MS 後に自動でサイレント再取得をスケジュールする。
-   */
-  const persistToken = useCallback((token: string) => {
-    const expiry = Date.now() + TOKEN_LIFETIME_MS;
-    localStorage.setItem(STORAGE_KEY_TOKEN, token);
-    localStorage.setItem(STORAGE_KEY_EXPIRY, String(expiry));
-    setAccessToken(token);
-
-    // 既存タイマーをリセット
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    refreshTimerRef.current = setTimeout(() => {
-      // サイレント再ログイン（prompt なし）
-      silentLogin();
-    }, TOKEN_LIFETIME_MS);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const clearToken = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY_TOKEN);
-    localStorage.removeItem(STORAGE_KEY_EXPIRY);
-    setAccessToken(null);
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    if (savedToken && expiryStr) {
+      const expiry = parseInt(expiryStr, 10);
+      if (Date.now() < expiry) {
+        setAccessToken(savedToken);
+      } else {
+        localStorage.removeItem(STORAGE_KEY_TOKEN);
+        localStorage.removeItem(STORAGE_KEY_EXPIRY);
+      }
+    }
   }, []);
 
-  // ── 通常ログイン ──────────────────────────────────────────────────────────────
   const login = useGoogleLogin({
-    onSuccess: (tokenResponse) => persistToken(tokenResponse.access_token),
-    scope: 'https://www.googleapis.com/auth/calendar.events',
-    onError: (error) => console.error('Login Failed:', error),
-  });
-
-  // ── サイレント再取得（prompt: 'none' で画面を出さずに更新） ─────────────────
-  const silentLogin = useGoogleLogin({
-    onSuccess: (tokenResponse) => persistToken(tokenResponse.access_token),
-    scope: 'https://www.googleapis.com/auth/calendar.events',
-    prompt: 'none',          // ← ポイント：認証画面を出さない
-    onError: () => {
-      // サイレント取得に失敗した場合はトークンを破棄してログアウト扱い
-      console.warn('サイレント更新に失敗しました。再ログインが必要です。');
-      clearToken();
-      setEvents(getMockEvents());
+    onSuccess: (tokenResponse) => {
+      setAccessToken(tokenResponse.access_token);
+      const expiryTime = Date.now() + TOKEN_LIFETIME_MS;
+      localStorage.setItem(STORAGE_KEY_TOKEN, tokenResponse.access_token);
+      localStorage.setItem(STORAGE_KEY_EXPIRY, expiryTime.toString());
     },
+    onError: (error) => console.error('Login Failed:', error),
+    scope: 'https://www.googleapis.com/auth/calendar.events',
   });
 
-  const logout = useCallback(() => {
-    clearToken();
-    setEvents(getMockEvents());
-  }, [clearToken]);
+  const logout = () => {
+    setAccessToken(null);
+    localStorage.removeItem(STORAGE_KEY_TOKEN);
+    localStorage.removeItem(STORAGE_KEY_EXPIRY);
+    setEvents([]);
+  };
 
-  // ── 起動時：保存済みトークンの復元 ───────────────────────────────────────────
-  useEffect(() => {
-    const token = localStorage.getItem(STORAGE_KEY_TOKEN);
-    const expiry = Number(localStorage.getItem(STORAGE_KEY_EXPIRY) || '0');
-
-    if (token && expiry > Date.now()) {
-      // まだ有効 → そのまま使う＋残り時間でタイマーセット
-      const remaining = expiry - Date.now();
-      setAccessToken(token);
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-      refreshTimerRef.current = setTimeout(() => silentLogin(), remaining);
-    } else if (token) {
-      // 期限切れ → サイレント更新を試みる
-      clearToken();
-      silentLogin();
-    } else {
-      // 未ログイン
-      setEvents(getMockEvents());
-    }
-
-    return () => {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Google カレンダー初回読み込み ─────────────────────────────────────────────
-  useEffect(() => {
-    if (!accessToken) return;
-    (async () => {
-      try {
-        setIsLoading(true);
-        const fetchedEvents = await fetchGoogleEvents(accessToken);
-        setEvents(fetchedEvents);
-      } catch (error) {
-        console.error(error);
-        if ((error as any).message?.includes('401')) {
-          clearToken();
-          silentLogin();
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    })();
-  }, [accessToken]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── 手動同期 ──────────────────────────────────────────────────────────────────
   const refreshEvents = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken) {
+      setEvents(getMockEvents());
+      return;
+    }
     setIsLoading(true);
     try {
-      const unSyncedEvents = events.filter(event => event.id.startsWith('evt-'));
-      for (const event of unSyncedEvents) {
-        await createGoogleEvent(accessToken, event).catch(err => console.error('失敗:', err));
-      }
-      const fetchedEvents = await fetchGoogleEvents(accessToken);
-      setEvents(fetchedEvents);
+      const gEvents = await fetchGoogleEvents(accessToken);
+      setEvents(gEvents);
     } catch (error) {
-      console.error('同期エラー:', error);
-      if ((error as any).message?.includes('401')) {
-        clearToken();
-        silentLogin();
-      }
+      console.error(error);
     } finally {
       setIsLoading(false);
     }
-  }, [accessToken, events]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accessToken]);
 
-  const handleSaveSettings = (newSettings: TimeSettings) => {
-    setTimeSettings(newSettings);
-    saveSettings(newSettings);
-    setShowSettings(false);
+  useEffect(() => {
+    refreshEvents();
+  }, [refreshEvents]);
+
+  const handleSelectEvent = (event: CalendarEvent) => {
+    setSelectedEvent(event);
   };
 
-  // ── 【２】新設：□MEMOのフィルタリング用ヘルパー（古い順ソート） ──────────────
-  const getFilteredMemos = useCallback(() => {
-    return events
-      .filter(e => e.isBatch || (e.title || '').toUpperCase().includes('MEMO'))
-      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
-  }, [events]);
-
-  // 【２】機能実装：一番古い □MEMO の抽出
-  const handleSelectOldestMemo = () => {
-    const memos = getFilteredMemos();
-    if (memos.length === 0) {
-      alert('対象となる □MEMO が見見つかりませんでした。');
-      return;
-    }
-    setSelectedEvent(memos[0]);
-  };
-
-  // 【２】機能実装：最新の □MEMO の抽出
-  const handleSelectLatestMemo = () => {
-    const memos = getFilteredMemos();
-    if (memos.length === 0) {
-      alert('対象となる □MEMO が見つかりませんでした。');
-      return;
-    }
-    setSelectedEvent(memos[memos.length - 1]);
-  };
-
-  // 【２】機能実装：□MEMOをすべて1つに集める（□タスク・☑タスク全並べ）
-  const handleCollectAllMemos = () => {
-    const memos = getFilteredMemos();
-    if (memos.length === 0) {
-      alert('集める対象の □MEMO が見つかりませんでした。');
-      return;
-    }
-
-    const combinedMemoLines: string[] = [];
-    memos.forEach(memoEvent => {
-      if (memoEvent.memo) {
-        const lines = memoEvent.memo.split('\n').map(l => l.trim()).filter(l => l !== '');
-        combinedMemoLines.push(...lines);
+  // 【エラー解消】SingleEditor（1行入力）用の保存制御関数
+  const handleSaveSingle = async (event: CalendarEvent) => {
+    if (accessToken) {
+      setIsLoading(true);
+      try {
+        const savedGoogleEvent = await createGoogleEvent(accessToken, event);
+        setEvents(prev => [...prev, savedGoogleEvent]);
+        await refreshEvents();
+      } catch (error) {
+        console.error(error);
+        await refreshEvents();
+      } finally {
+        setIsLoading(false);
       }
-    });
-
-    if (combinedMemoLines.length === 0) {
-      alert('□MEMO は見つかりましたが、中身が空でした。');
-      return;
+    } else {
+      addMockEvent(event);
+      setEvents(getMockEvents());
     }
-
-    const today21 = new Date(); today21.setHours(21, 0, 0, 0);
-    const today22 = new Date(); today22.setHours(22, 0, 0, 0);
-
-    const collectedEvent: CalendarEvent = {
-      id: `evt-${Date.now()}-collected`,
-      title: '□MEMO',
-      start: today21,
-      end: today22,
-      memo: combinedMemoLines.join('\n'),
-      status: 'unchecked',
-      isBatch: true,
-    };
-
-    setSelectedEvent(collectedEvent);
   };
 
+  // BatchEditor（一括エディター）用の保存制御関数（単一・複数配列両対応）
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[]) => {
-    // 降ってきたデータが単一オブジェクトなら配列にラップして共通ループ処理にする
     const eventsToSave = Array.isArray(input) ? input : [input];
 
     if (accessToken) {
       setIsLoading(true);
       try {
-        // 1. 元の古い予定がある場合、設定の「抽出統合完了タスクの設定」に従って削除を判定
+        // 1. 元の予定がある場合、設定の削除選択に従ってクリーンアップ
         if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
           const isPast = new Date(selectedEvent.start) < new Date();
           const shouldDelete = isPast 
             ? timeSettings.deletePastCompleted 
             : timeSettings.deleteFutureCompleted;
 
-          // 今回の新しいイベント群のなかに、元の古いIDを再利用しているものが「含まれない」かつ、設定で削除条件に該当する場合に消去
           const idReused = eventsToSave.some(e => e.id === selectedEvent.id);
           if (shouldDelete && !idReused) {
             await deleteGoogleEvent(accessToken, selectedEvent.id).catch(err => console.error(err));
           }
         }
 
-        // 2. 構築されたイベント群をループでGoogleカレンダーに保存
+        // 2. 新しいイベント（群）をカレンダーへ保存
         for (const event of eventsToSave) {
-          // 元のイベントIDと一致し、かつ仮IDでなければ上書き(PUT)、それ以外は新規作成(POST)
           if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
             await updateGoogleEvent(accessToken, event);
           } else {
             await createGoogleEvent(accessToken, event);
           }
         }
-
         await refreshEvents();
       } catch (error) {
         console.error(error);
@@ -258,7 +142,7 @@ function App() {
         setSelectedEvent(null);
       }
     } else {
-      // オフライン（Mock）用の処理
+      // オフライン（Mock環境）の処理
       if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
         const isPast = new Date(selectedEvent.start) < new Date();
         const shouldDelete = isPast ? timeSettings.deletePastCompleted : timeSettings.deleteFutureCompleted;
@@ -280,122 +164,94 @@ function App() {
     }
   };
 
-  const handleCarryOver = async (items: BatchItem[]) => {
-    const today21 = new Date(); today21.setHours(21, 0, 0, 0);
-    const today22 = new Date(); today22.setHours(22, 0, 0, 0);
-    const newEvent: CalendarEvent = {
-      id: `evt-${Date.now()}-carry`,
-      title: '□MEMO',
-      start: today21,
-      end: today22,
-      memo: items.map(item => `${item.checked ? '☑' : '□'} ${item.text.replace(/^[□☑]\s*/, '').trim()}`).join('\n'),
-      status: 'unchecked',
-      isBatch: true,
-    };
+  const handleCarryOver = (items: BatchItem[], timeOption: any) => {
+    console.log('Carry over items:', items, 'to', timeOption);
+  };
+
+  const handleSaveSettings = (settings: TimeSettings) => {
+    setTimeSettings(settings);
+    saveSettings(settings);
+    setShowSettings(false);
+  };
+
+  const handleMergeWeeklyMemos = async () => {
     if (accessToken) {
       setIsLoading(true);
       try {
-        await createGoogleEvent(accessToken, newEvent);
-        await refreshEvents();
+        const gEvents = await fetchGoogleEvents(accessToken);
+        const result = consolidateWeeklyMemos(gEvents);
+        if (result) {
+          for (const id of result.targetIds) {
+            await deleteGoogleEvent(accessToken, id).catch(err => console.error(err));
+          }
+          await createGoogleEvent(accessToken, result.mergedEvent);
+          await refreshEvents();
+        }
       } catch (error) {
         console.error(error);
       } finally {
         setIsLoading(false);
       }
     } else {
-      addMockEvent(newEvent);
-      setEvents(getMockEvents());
+      const result = consolidateWeeklyMemos(getMockEvents());
+      if (result) {
+        result.targetIds.forEach(id => deleteMockEvent(id));
+        addMockEvent(result.mergedEvent);
+        setEvents(getMockEvents());
+      }
     }
   };
 
-  const handleSelectEvent = useCallback((event: CalendarEvent) => {
-    setSelectedEvent(event);
-  }, []);
+  const handleMergeMemosClick = () => {
+    console.log('MEMOを編集 click');
+  };
 
-  const handleMergeWeeklyMemos = async () => {
-    const before = timeSettings.mergeDaysBefore ?? 7;
-    const after = timeSettings.mergeDaysAfter ?? 7;
-    const { mergedEvent, targetIds } = consolidateWeeklyMemos(events, before, after);
+  const handleSelectOldestMemo = () => {
+    const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
+    if (memoEvents.length === 0) return;
+    const oldest = memoEvents.reduce((old, current) => 
+      new Date(current.start) < new Date(old.start) ? current : old
+    );
+    setSelectedEvent(oldest);
+  };
 
-    if (targetIds.length === 0) {
-      alert('統合対象となる未完了メモが見つかりませんでした。');
-      return;
-    }
+  const handleCollectAllMemos = () => {
+    console.log('□MEMOを集める click');
+  };
 
-    if (!window.confirm(`未完了メモが ${targetIds.length} 件見つかりました。本日21時の『□ MEMO』に1つにまとめますか？`)) return;
-
-    setIsLoading(true);
-    try {
-      if (accessToken) {
-        for (const id of targetIds) {
-          if (!id.startsWith('evt-')) {
-            await deleteGoogleEvent(accessToken, id).catch(err => console.error(err));
-          }
-        }
-        await createGoogleEvent(accessToken, mergedEvent);
-        await refreshEvents();
-      } else {
-        targetIds.forEach(id => deleteMockEvent(id));
-        addMockEvent(mergedEvent);
-        setEvents(getMockEvents());
-      }
-      alert('タスクを本日の21時に集約しました！');
-    } catch (error) {
-      console.error(error);
-      alert('統合処理中にエラーが発生しました。');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleSelectLatestMemo = () => {
+    const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
+    if (memoEvents.length === 0) return;
+    const latest = memoEvents.reduce((lat, current) => 
+      new Date(current.start) > new Date(lat.start) ? current : lat
+    );
+    setSelectedEvent(latest);
   };
 
   return (
     <div className="app-container">
       <header className="app-header">
-        <div className="app-logo">
-          <CalendarIcon size={24} />
-          scheMEMO
+        <div className="header-title-area">
+          <CalendarIcon className="header-icon" size={28} />
+          <h1 className="header-title">scheMEMO</h1>
+          {isLoading && <RefreshCw className="animate-spin text-muted" size={18} />}
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+        <div className="header-actions">
+          <button className="icon-btn" onClick={refreshEvents} title="同期" disabled={isLoading}>
+            <RefreshCw size={20} className={isLoading ? 'animate-spin' : ''} />
+          </button>
+          <button className="icon-btn" onClick={() => setShowSettings(true)} title="設定">
+            <Settings size={20} />
+          </button>
           {accessToken ? (
-            <>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={refreshEvents}
-                title="カレンダーを更新・同期"
-                style={{ padding: '0.4rem', minHeight: '34px' }}
-                disabled={isLoading}
-              >
-                <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
-              </button>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={logout}
-                title="Googleカレンダーからログアウト"
-                style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
-              >
-                <LogOut size={16} /> ログアウト
-              </button>
-            </>
+            <button className="btn btn-outline btn-sm font-semibold" onClick={logout}>
+              <LogOut size={16} /> ログアウト
+            </button>
           ) : (
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={() => login()}
-              title="Googleカレンダーにログイン・連携"
-              style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center' }}
-            >
-              <LogIn size={14} /> ログイン
+            <button className="btn btn-primary btn-sm font-semibold" onClick={() => login()}>
+              <LogIn size={16} /> Googleログイン
             </button>
           )}
-
-          <button
-            className={`btn btn-outline btn-sm${showSettings ? ' btn-primary' : ''}`}
-            style={{ padding: '0.4rem', minHeight: '34px' }}
-            onClick={() => setShowSettings(v => !v)}
-            title="設定"
-          >
-            <Settings size={16} />
-          </button>
         </div>
       </header>
 
@@ -408,29 +264,27 @@ function App() {
       )}
 
       <div className="editors-section">
+        {/* 【１】１行クイック入力エディター */}
         <SingleEditor onSave={handleSaveSingle} />
-
-        {/* ── 【１】【２】UIボタン操作エリアの刷新 ────────────────────────── */}
+        
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', margin: '0.5rem 0' }}>
-          
-          {/* 【１】横長1行の「□タスクを ↓ □MEMOにする」ボタン */}
           <button
             className="btn btn-secondary"
             onClick={handleMergeWeeklyMemos}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '44px' }}
+            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '44px' }}
             disabled={isLoading}
           >
             <Layers size={18} /> □タスクを ↓ □MEMOにする
           </button>
 
-{/* 【２】3列等幅・2行縦並び表示の機能ボタン */}
+          {/* 【２】3列等幅・機能ボタンエリア (🎨 カラーパレット修正済) */}
           <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
             <button
               className="btn btn-outline btn-memo-action"
               onClick={handleSelectOldestMemo}
               disabled={isLoading}
-              /* 🎨 右：キリッとした濃いパープル */
-              style={{ color: 'var(--primary-hover)', borderColor: 'var(--primary-hover)' }}
+              /* 🎨 左：枠線をライトパープル、文字はメインテキスト色に */
+              style={{ color: 'var(--text-main)', borderColor: 'var(--primary-light)', backgroundColor: 'rgba(79, 70, 229, 0.05)' }}
             >
               <div>一番古い</div>
               <div>□MEMO</div>
@@ -460,6 +314,7 @@ function App() {
           </div>
         </div>
 
+        {/* 【３】一括編集エディター（チェック混在 / ☑・□分離2ボタン仕様のイベントに対応） */}
         <BatchEditor
           onSave={handleSaveBatch}
           onCarryOver={handleCarryOver}
