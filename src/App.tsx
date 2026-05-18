@@ -10,8 +10,7 @@ import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
 import {
   getMockEvents, addMockEvent, updateMockEvent,
-  deleteMockEvent, consolidateWeeklyMemos,
-  getOldestMemoEvent, getNewestMemoEvent, collectAllMemosInRange,
+  extractMemosFromSettingsRange, deleteMockEvent, consolidateWeeklyMemos
 } from './utils/calendarUtils';
 import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
 import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
@@ -155,28 +154,68 @@ function App() {
     setShowSettings(false);
   };
 
-  // 一番古い □MEMO を BatchEditor に表示
-  const handleOldestMemo = () => {
-    const event = getOldestMemoEvent(events, timeSettings);
-    if (event) setSelectedEvent(event);
-    else alert('□MEMOの抽出範囲に対象が見つかりませんでした。');
-  };
+  // ── 【２】新設：□MEMOのフィルタリング用ヘルパー（古い順ソート） ──────────────
+  const getFilteredMemos = useCallback(() => {
+    return events
+      .filter(e => e.isBatch || (e.title || '').toUpperCase().includes('MEMO'))
+      .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  }, [events]);
 
-  // 範囲内の □MEMO を全集約して BatchEditor に表示
-  const handleCollectAllMemos = () => {
-    const collected = collectAllMemosInRange(events, timeSettings);
-    if (!collected.memo || collected.memo.trim() === '') {
-      alert('□MEMOの抽出範囲に集約できる内容が見つかりませんでした。');
+  // 【２】機能実装：一番古い □MEMO の抽出
+  const handleSelectOldestMemo = () => {
+    const memos = getFilteredMemos();
+    if (memos.length === 0) {
+      alert('対象となる □MEMO が見見つかりませんでした。');
       return;
     }
-    setSelectedEvent(collected);
+    setSelectedEvent(memos[0]);
   };
 
-  // 一番新しい □MEMO を BatchEditor に表示
-  const handleNewestMemo = () => {
-    const event = getNewestMemoEvent(events, timeSettings);
-    if (event) setSelectedEvent(event);
-    else alert('□MEMOの抽出範囲に対象が見つかりませんでした。');
+  // 【２】機能実装：最新の □MEMO の抽出
+  const handleSelectLatestMemo = () => {
+    const memos = getFilteredMemos();
+    if (memos.length === 0) {
+      alert('対象となる □MEMO が見つかりませんでした。');
+      return;
+    }
+    setSelectedEvent(memos[memos.length - 1]);
+  };
+
+  // 【２】機能実装：□MEMOをすべて1つに集める（□タスク・☑タスク全並べ）
+  const handleCollectAllMemos = () => {
+    const memos = getFilteredMemos();
+    if (memos.length === 0) {
+      alert('集める対象の □MEMO が見つかりませんでした。');
+      return;
+    }
+
+    const combinedMemoLines: string[] = [];
+    memos.forEach(memoEvent => {
+      if (memoEvent.memo) {
+        const lines = memoEvent.memo.split('\n').map(l => l.trim()).filter(l => l !== '');
+        combinedMemoLines.push(...lines);
+      }
+    });
+
+    if (combinedMemoLines.length === 0) {
+      alert('□MEMO は見つかりましたが、中身が空でした。');
+      return;
+    }
+
+    const today21 = new Date(); today21.setHours(21, 0, 0, 0);
+    const today22 = new Date(); today22.setHours(22, 0, 0, 0);
+
+    const collectedEvent: CalendarEvent = {
+      id: `evt-${Date.now()}-collected`,
+      title: '□MEMO',
+      start: today21,
+      end: today22,
+      memo: combinedMemoLines.join('\n'),
+      status: 'unchecked',
+      isBatch: true,
+    };
+
+    setSelectedEvent(collectedEvent);
   };
 
   const handleSaveSingle = async (event: CalendarEvent) => {
@@ -355,58 +394,49 @@ function App() {
       <div className="editors-section">
         <SingleEditor onSave={handleSaveSingle} />
 
-        {/* 【１】タスクをまとめる：横長1行ボタン */}
-        <button
-          className="btn btn-secondary"
-          onClick={handleMergeWeeklyMemos}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px' }}
-          disabled={isLoading}
-        >
-          <Layers size={18} /> □タスクを → □MEMOにする
-        </button>
+        {/* ── 【１】【２】UIボタン操作エリアの刷新 ────────────────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', margin: '0.5rem 0' }}>
+          
+          {/* 【１】横長1行の「□タスクを ↓ □MEMOにする」ボタン */}
+          <button
+            className="btn btn-secondary"
+            onClick={handleMergeWeeklyMemos}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '44px' }}
+            disabled={isLoading}
+          >
+            <Layers size={18} /> □タスクを ↓ □MEMOにする
+          </button>
 
-        {/* 【２】3つのMEMO操作ボタン */}
-        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
-          <button
-            className="btn btn-outline"
-            onClick={handleOldestMemo}
-            style={{
-              flex: 1,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: '0.125rem', minHeight: '52px', fontSize: '0.8rem', lineHeight: 1.3,
-              padding: '0.4rem 0.25rem',
-            }}
-          >
-            <span>一番古い</span>
-            <span>□MEMO</span>
-          </button>
-          <button
-            className="btn btn-outline"
-            onClick={handleCollectAllMemos}
-            style={{
-              flex: 1,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: '0.125rem', minHeight: '52px', fontSize: '0.8rem', lineHeight: 1.3,
-              padding: '0.4rem 0.25rem',
-              color: 'var(--primary)', borderColor: 'var(--primary)',
-            }}
-          >
-            <span>□MEMOを</span>
-            <span>集める</span>
-          </button>
-          <button
-            className="btn btn-outline"
-            onClick={handleNewestMemo}
-            style={{
-              flex: 1,
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: '0.125rem', minHeight: '52px', fontSize: '0.8rem', lineHeight: 1.3,
-              padding: '0.4rem 0.25rem',
-            }}
-          >
-            <span>最新の</span>
-            <span>□MEMO</span>
-          </button>
+          {/* 【２】3列等幅・2行縦並び表示の機能ボタン */}
+          <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+            <button
+              className="btn btn-outline btn-memo-action"
+              onClick={handleSelectOldestMemo}
+              disabled={isLoading}
+            >
+              <div>一番古い</div>
+              <div>□MEMO</div>
+            </button>
+
+            <button
+              className="btn btn-outline btn-memo-action"
+              onClick={handleCollectAllMemos}
+              disabled={isLoading}
+              style={{ color: 'var(--accent)', borderColor: 'var(--accent)' }}
+            >
+              <div>□MEMOを</div>
+              <div>集める</div>
+            </button>
+
+            <button
+              className="btn btn-outline btn-memo-action"
+              onClick={handleSelectLatestMemo}
+              disabled={isLoading}
+            >
+              <div>最新の</div>
+              <div>□MEMO</div>
+            </button>
+          </div>
         </div>
 
         <BatchEditor
