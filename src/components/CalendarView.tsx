@@ -48,40 +48,6 @@ const EventPopup: React.FC<EventPopupProps> = ({ event, onClose }) => (
   </div>
 );
 
-interface DragHandleProps {
-  position: 'top' | 'bottom';
-  onDrag: (deltaY: number) => void;
-}
-
-const DragHandle: React.FC<DragHandleProps> = ({ position, onDrag }) => {
-  const dragging = useRef(false);
-  const lastY = useRef(0);
-
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    dragging.current = true;
-    lastY.current = e.clientY;
-
-    const onMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      const delta = ev.clientY - lastY.current;
-      lastY.current = ev.clientY;
-      onDrag(position === 'top' ? -delta : delta);
-    };
-    const onUp = () => {
-      dragging.current = false;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-  }, [position, onDrag]);
-
-  return (
-    <div className="calendar-resize-handle" onMouseDown={onMouseDown} />
-  );
-};
-
 const MIN_HEIGHT = 300;
 const MAX_HEIGHT = 900;
 const DEFAULT_HEIGHT = 650;
@@ -90,14 +56,14 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   const [calHeight, setCalHeight] = useState(DEFAULT_HEIGHT);
   const [popupEvent, setPopupEvent] = useState<CalendarEvent | null>(null);
 
-  const handleDrag = useCallback((delta: number) => {
-    setCalHeight(h => Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, h + delta)));
-  }, []);
+  // ドラッグ管理用のRef
+  const isDragging = useRef(false);
+  const startY = useRef(0);
+  const startHeight = useRef(0);
 
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
     const cleanTitle = (event.title || '').replace(/\s+/g, '').toUpperCase();
     
-    // 【６】【７】「□MEMO」または「□」「☑」からはじまる通常予定もBatchエディターの対象に含める
     const isMemoOrSingleTask = 
       event.isBatch || 
       cleanTitle.includes('MEMO') || 
@@ -105,18 +71,83 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
       event.title.startsWith('☑');
     
     if (isMemoOrSingleTask) {
-      setPopupEvent(event);   // 前面ポップアップを表示
-      onSelectEvent(event);   // BatchEditorへデータを流してトップへ動かす
+      setPopupEvent(event);
+      onSelectEvent(event);
       return;
     }
     
-    // 通常予定の場合
     setPopupEvent(event);
   }, [onSelectEvent]);
 
+  // ─── カレンダー全体のドラッグリサイズ処理 ───
+
+  const startResize = (clientY: number, target: HTMLElement) => {
+    // ボタンや予定(イベント)を直接タップした場合はリサイズを起動しない
+    if (
+      target.closest('button') || 
+      target.closest('.rbc-event') || 
+      target.closest('.custom-event-content')
+    ) {
+      return;
+    }
+
+    isDragging.current = true;
+    startY.current = clientY;
+    startHeight.current = calHeight;
+
+    const onMove = (moveY: number) => {
+      if (!isDragging.current) return;
+      // 下に引っ張ったら高く、上に引っ張ったら低くする
+      const deltaY = moveY - startY.current;
+      setCalHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight.current + deltaY)));
+    };
+
+    const handleMouseMove = (e: MouseEvent) => onMove(e.clientY);
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length > 0) {
+        // スワイプによる画面全体のスクロールを防止
+        if (e.cancelable) e.preventDefault();
+        onMove(e.touches[0].clientY);
+      }
+    };
+
+    const onUp = () => {
+      isDragging.current = false;
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', onUp);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+  };
+
+  // マウス（PC）での操作開始
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    startResize(e.clientY, e.target as HTMLElement);
+  };
+
+  // タッチ（スマホ）での操作開始
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length > 0) {
+      startResize(e.touches[0].clientY, e.target as HTMLElement);
+    }
+  };
+
   return (
-    <div className="calendar-resizable-wrapper">
-      <DragHandle position="top" onDrag={handleDrag} />
+    <div 
+      className="calendar-resizable-wrapper"
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
+      style={{ 
+        cursor: 'ns-resize', // マウスホバー時に上下矢印のカーソルにして、引っ張れることを直感的に伝える
+        touchAction: 'none',  // スマホでの予期せぬスクロール挙動を防止
+        userSelect: 'none'    // ドラッグ中に文字が選択されて青くなるのを防ぐ
+      }}
+    >
       <Calendar
         localizer={localizer}
         events={events}
@@ -127,7 +158,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
         views={[Views.MONTH]}
         onSelectEvent={handleSelectEvent}
         components={{ event: CustomEvent }}
-        style={{ height: calHeight }}
+        style={{ height: calHeight, pointerEvents: 'auto' }}
         eventPropGetter={(event: CalendarEvent) => {
           let className = '';
           if (event.status === 'checked') className = 'checked';
@@ -148,7 +179,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
           noEventsInRange: 'この期間に予定はありません。',
         }}
       />
-      <DragHandle position="bottom" onDrag={handleDrag} />
 
       {popupEvent && (
         <EventPopup
