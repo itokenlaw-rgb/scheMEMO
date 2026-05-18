@@ -291,6 +291,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                 marginBottom: 0,
                 gap: 0,
                 borderTop: index === 0 ? 'none' : '1px solid var(--border)',
+                minHeight: 0,
               }}
             >
               <button 
@@ -303,6 +304,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                   margin: 0,
                   alignSelf: 'stretch',
                   width: '36px',
+                  padding: '0',
                 }}
               >
                 {item.checked && <Check size={16} />}
@@ -320,6 +322,8 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                   border: 'none',
                   boxShadow: 'none',
                   flex: 1,
+                  paddingTop: '4px',
+                  paddingBottom: '4px',
                 }}
               />
               <button
@@ -331,12 +335,12 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver, i
                   borderLeft: '1px solid var(--border)',
                   cursor: 'pointer',
                   color: 'var(--text-muted)',
-                  padding: '0.25rem',
+                  padding: '0',
                   display: 'flex',
                   alignItems: 'center',
                   flexShrink: 0,
                   minWidth: '32px',
-                  minHeight: '32px',
+                  minHeight: 0,
                   justifyContent: 'center',
                   borderRadius: 0,
                   transition: 'var(--transition)',
