@@ -26,6 +26,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
+  // 一括化（マージ）対象になっている元の□タスクたちのIDを一時保存するステート
+  const [mergedTaskIds, setMergedTaskIds] = useState<string[]>([]);
+
   useEffect(() => {
     const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
     const expiryStr = localStorage.getItem(STORAGE_KEY_EXPIRY);
@@ -101,6 +104,7 @@ function App() {
     }
   };
 
+  // ── 【仕様変更】BatchEditorの保存完了時に、記憶していた元の□タスクを「☑」にする ──
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
     console.log(`Saving batch in mode: ${saveMode}`);
@@ -108,6 +112,7 @@ function App() {
     if (accessToken) {
       setIsLoading(true);
       try {
+        // 1. 新しい □MEMO イベントを保存または更新
         for (const event of eventsToSave) {
           if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
             await updateGoogleEvent(accessToken, event);
@@ -115,14 +120,36 @@ function App() {
             await createGoogleEvent(accessToken, event);
           }
         }
+
+        // 2. 【手順④】統合元として記憶していた「□タスク」があれば、すべて「☑」に変更して更新
+        if (mergedTaskIds.length > 0) {
+          // カレンダー上の最新イベントから該当タスクを探す
+          const currentEvents = await fetchGoogleEvents(accessToken);
+          const tasksToComplete = currentEvents.filter(e => mergedTaskIds.includes(e.id));
+          
+          for (const task of tasksToComplete) {
+            // もしすでに「☑」から始まっていなければ、頭を「☑」に置換
+            if (task.title.startsWith('□')) {
+              const updatedTask: CalendarEvent = {
+                ...task,
+                title: task.title.replace(/^□/, '☑'),
+                status: 'checked'
+              };
+              await updateGoogleEvent(accessToken, updatedTask);
+            }
+          }
+        }
+
         await refreshEvents();
       } catch (error) {
         console.error(error);
       } finally {
         setIsLoading(false);
         setSelectedEvent(null);
+        setMergedTaskIds([]); // 記憶をリセット
       }
     } else {
+      // ローカル（Mock）環境の場合
       eventsToSave.forEach(event => {
         if (selectedEvent && event.id === selectedEvent.id) {
           updateMockEvent(event);
@@ -130,8 +157,24 @@ function App() {
           addMockEvent(event);
         }
       });
+
+      // 【手順④】ローカル環境でも元の□タスクを「☑」に変える
+      if (mergedTaskIds.length > 0) {
+        const currentEvents = getMockEvents();
+        currentEvents.forEach((task) => {
+          if (mergedTaskIds.includes(task.id) && task.title.startsWith('□')) {
+            updateMockEvent({
+              ...task,
+              title: task.title.replace(/^□/, '☑'),
+              status: 'checked'
+            });
+          }
+        });
+      }
+
       setEvents(getMockEvents());
       setSelectedEvent(null);
+      setMergedTaskIds([]); // 記憶をリセット
     }
   };
 
@@ -145,16 +188,14 @@ function App() {
     setShowSettings(false);
   };
 
-  // ── 【修正・実装】「□タスクを⇩□MEMOにする」の統合ロジック ──
+  // ── 【手順③】「□タスクを⇩□MEMOにする」ボタンを押した時の抽出処理（画面表示のみ） ──
   const handleMergeWeeklyMemos = async () => {
     setIsLoading(true);
     try {
-      // 最新のイベント一覧を取得
       const currentEvents = accessToken ? await fetchGoogleEvents(accessToken) : getMockEvents();
 
-      // 1. 抽出範囲（日前・日後）をDate型で厳密に計算
+      // 1. 抽出範囲（日前・日後）の計算
       const now = new Date();
-      
       const startRange = new Date(now);
       startRange.setDate(now.getDate() - timeSettings.mergeDaysBefore);
       startRange.setHours(0, 0, 0, 0);
@@ -163,38 +204,37 @@ function App() {
       endRange.setDate(now.getDate() + timeSettings.mergeDaysAfter);
       endRange.setHours(23, 59, 59, 999);
 
-      // 2. 範囲内の予定から「□」で始まるタスクだけを集める（既存の「□MEMO」自体は除外）
+      // 2. 【仕様変更】「□」から始まる未完了タスクだけを厳密に抽出（☑は集めない）
       const targetTasks = currentEvents.filter((e: CalendarEvent) => {
         const eventDate = new Date(e.start);
-        const title = e.title || '';
+        const title = (e.title || '').trim();
         
-        // 日付が範囲内、かつ「□」から始まり、タイトルそのものが「□MEMO」ではないもの
-        return (
-          eventDate >= startRange &&
-          eventDate <= endRange &&
-          title.startsWith('□') &&
-          title.trim() !== '□MEMO'
-        );
+        const isWithinRange = eventDate >= startRange && eventDate <= endRange;
+        // 「□」で始まり、かつ「□MEMO」などの一括メモ自体ではないもの
+        const isTargetTask = title.startsWith('□') && title !== '□MEMO' && !e.isBatch;
+
+        return isWithinRange && isTargetTask;
       });
 
       if (targetTasks.length === 0) {
-        alert("設定された抽出範囲内に、対象となる「□」から始まるタスクが見つかりませんでした。");
+        alert("設定された抽出範囲内に、集める対象の「□」から始まるタスクが見つかりませんでした。");
         setIsLoading(false);
         return;
       }
 
-      // 3. 集めたタイトルの文字をそのまま1行ずつの箇条書きテキストにする
+      // 3. 集めたタイトルの文字を箇条書きテキストにする
       const memoLines = targetTasks.map((t: CalendarEvent) => t.title.trim());
       const memoContent = memoLines.join('\n');
 
-      // 4. まとめた予定「□MEMO」の時間を設定（基本設定の □MEMO保存 本日の〇時）
+      // 4. □MEMO保存 本日の〇時 の時刻を作成
       const memoStart = new Date(now);
       memoStart.setHours(timeSettings.batchMemoSaveHour, 0, 0, 0);
       const memoEnd = new Date(memoStart);
       memoEnd.setHours(memoStart.getHours() + 1);
 
-      const newBatchMemoEvent: CalendarEvent = {
-        id: `evt-${Date.now()}-merged`,
+      // 5. 画面中央のエディターに展開するための仮想的なイベントオブジェクトを作成
+      const generatedMemoEvent: CalendarEvent = {
+        id: `evt-${Date.now()}-merged`, // 一時的なID
         title: '□MEMO',
         start: memoStart,
         end: memoEnd,
@@ -203,39 +243,16 @@ function App() {
         isBatch: true
       };
 
-      // 5. カレンダーへの反映（Google連携 / ローカル環境）
-      if (accessToken) {
-        // 新しい「□MEMO」を作成
-        await createGoogleEvent(accessToken, newBatchMemoEvent);
+      // 6. 後で保存された時に「☑」に変えられるよう、集めたタスクのIDリストを記憶
+      const taskIds = targetTasks.map(t => t.id);
+      setMergedTaskIds(taskIds);
 
-        // 元のタスクを「削除」せず、タイトルを「☑」へ書き換えて更新
-        for (const task of targetTasks) {
-          const updatedTask: CalendarEvent = {
-            ...task,
-            title: task.title.replace(/^□/, '☑'),
-            status: 'checked'
-          };
-          await updateGoogleEvent(accessToken, updatedTask);
-        }
-        await refreshEvents();
-      } else {
-        // ローカル（Mock）環境の処理
-        addMockEvent(newBatchMemoEvent);
-        targetTasks.forEach((task: CalendarEvent) => {
-          updateMockEvent({
-            ...task,
-            title: task.title.replace(/^□/, '☑'),
-            status: 'checked'
-          });
-        });
-        setEvents(getMockEvents());
-      }
-
-      alert(`「□タスク」を1つにまとめ、元のタスクを完了に変更しました。\n（合計 ${targetTasks.length} 件を統合）`);
+      // 7. 選択状態（selectedEvent）にセットすることで、BatchEditorに瞬時にテキストを表示させる
+      setSelectedEvent(generatedMemoEvent);
 
     } catch (error) {
       console.error(error);
-      alert("処理中にエラーが発生しました。設定や通信状況を確認してください。");
+      alert("処理中にエラーが発生しました。");
     } finally {
       setIsLoading(false);
     }
@@ -322,7 +339,7 @@ function App() {
           </div>
         </div>
 
-        <BatchEditor onSave={handleSaveBatch} onCarryOver={handleCarryOver} initialEvent={selectedEvent} onClose={() => setSelectedEvent(null)} />
+        <BatchEditor onSave={handleSaveBatch} onCarryOver={handleCarryOver} initialEvent={selectedEvent} onClose={() => { setSelectedEvent(null); setMergedTaskIds([]); }} />
       </div>
 
       <div className="calendar-section">
