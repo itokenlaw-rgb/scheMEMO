@@ -209,10 +209,8 @@ function App() {
         const eventDate = new Date(e.start);
         const title = (e.title || '').trim();
         
-        // 指定された日付範囲内か
         const isWithinRange = eventDate >= startRange && eventDate <= endRange;
         
-        // 「□」で始まり、かつ「□MEMO」などの一括用タイトルを含まない純粋なタスクか（タイトル空防御付き）
         const isPureTask = 
           title.startsWith('□') && 
           !title.toUpperCase().includes('MEMO') && 
@@ -227,7 +225,14 @@ function App() {
         return;
       }
 
-      // 3. 集めたタスクのタイトルを1行ずつの箇条書きテキスト（内容欄用）にする
+      // ── 【１の修正】集めたタスクを開始時刻の古い順（時系列順）に並び替える ──
+      targetTasks.sort((a, b) => {
+        const timeA = new Date(a.start).getTime();
+        const timeB = new Date(b.start).getTime();
+        return timeA - timeB; // 古い順にソート
+      });
+
+      // 3. 時系列順にソートされたタスクのタイトルを1行ずつの箇条書きテキストにする
       const memoLines = targetTasks.map((t: CalendarEvent) => (t.title || '').trim());
       const memoContent = memoLines.join('\n');
 
@@ -252,12 +257,12 @@ function App() {
       const taskIds = targetTasks.map(t => t.id);
       setMergedTaskIds(taskIds);
 
-      // 7. エディターへセット（BatchEditorが自動的に起動し、バラして中身を表示します）
+      // 7. エディターへセット
       setSelectedEvent(generatedMemoEvent);
 
     } catch (error) {
       console.error(error);
-      alert("処理中にエラーが発生しました。カレンダーデータの一部に不整合がある可能性があります。");
+      alert("処理中にエラーが発生しました。");
     } finally {
       setIsLoading(false);
     }
