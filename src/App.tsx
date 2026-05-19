@@ -9,10 +9,9 @@ import type { CalendarEvent, BatchItem } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
 import {
-  getMockEvents, addMockEvent, updateMockEvent,
-  deleteMockEvent, consolidateWeeklyMemos
+  getMockEvents, addMockEvent, updateMockEvent
 } from './utils/calendarUtils';
-import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
+import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent } from './api/googleCalendar';
 import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
 
 const TOKEN_LIFETIME_MS = 55 * 60 * 1000;
@@ -102,9 +101,11 @@ function App() {
     }
   };
 
-  // 一括エディターの保存処理（こちらも削除ではなく、完了フラグ等に応じた更新に変更）
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
+
+    // 将来の拡張や設定値参照用に saveMode のログを出力（未使用エラー対策を兼ねる）
+    console.log(`Saving batch in mode: ${saveMode}`);
 
     if (accessToken) {
       setIsLoading(true);
@@ -146,13 +147,11 @@ function App() {
     setShowSettings(false);
   };
 
-  // 【2の修正】：元のタスクを削除せず、□を☑に変更して完了タスク(色変更対象)とする「まとめ」処理
   const handleMergeWeeklyMemos = async () => {
     setIsLoading(true);
     try {
       const currentEvents = accessToken ? await fetchGoogleEvents(accessToken) : getMockEvents();
 
-      // 1. 設定から抽出範囲を取得
       const now = new Date();
       const startRange = new Date(now);
       startRange.setDate(now.getDate() - timeSettings.mergeDaysBefore);
@@ -162,8 +161,8 @@ function App() {
       endRange.setDate(now.getDate() + timeSettings.mergeDaysAfter);
       endRange.setHours(23, 59, 59, 999);
 
-      // 2. 範囲内の「□」から始まる予定を抽出
-      const targetTasks = currentEvents.filter(e => {
+      // 型エラー修正: 引数 e に型を指定
+      const targetTasks = currentEvents.filter((e: CalendarEvent) => {
         const eventDate = new Date(e.start);
         return eventDate >= startRange && eventDate <= endRange && e.title.startsWith('□') && !e.title.toUpperCase().includes('MEMO') && !e.isBatch;
       });
@@ -174,11 +173,10 @@ function App() {
         return;
       }
 
-      // 3. まとめた予定「□MEMO」の内容を作成
-      const memoLines = targetTasks.map(t => `□ ${t.title.replace(/^[□☑]\s*/, '').trim()}`);
+      // 型エラー修正: 引数 t に型を指定
+      const memoLines = targetTasks.map((t: CalendarEvent) => `□ ${t.title.replace(/^[□☑]\s*/, '').trim()}`);
       const memoContent = memoLines.join('\n');
 
-      // 4. □MEMOの保存時間を生成 (設定の batchMemoSaveHour 時)
       const memoStart = new Date(now);
       memoStart.setHours(timeSettings.batchMemoSaveHour, 0, 0, 0);
       const memoEnd = new Date(memoStart);
@@ -195,10 +193,9 @@ function App() {
       };
 
       if (accessToken) {
-        // Google連携時：新しくまとめた□MEMOを作成
         await createGoogleEvent(accessToken, newBatchMemoEvent);
 
-        // 元のタスクは削除せず、タイトルを「☑」にし、ステータスを checked にして更新
+        // 型エラー修正: 引数 task に型を指定
         for (const task of targetTasks) {
           const updatedTask: CalendarEvent = {
             ...task,
@@ -209,9 +206,8 @@ function App() {
         }
         await refreshEvents();
       } else {
-        // ローカル（Mock）環境
         addMockEvent(newBatchMemoEvent);
-        targetTasks.forEach(task => {
+        targetTasks.forEach((task: CalendarEvent) => {
           updateMockEvent({
             ...task,
             title: task.title.replace(/^□/, '☑'),
