@@ -54,7 +54,7 @@ function calcPresetTime(value: string, s: TimeSettings): { start: Date; end: Dat
     case 'p3':
       start.setDate(now.getDate() + 1);
       start.setHours(s.preset3TomorrowHour, 0, 0, 0);
-      break;
+break;
     case 'p4':
       start.setDate(now.getDate() + 1);
       start.setHours(s.preset4TomorrowNightHour, 0, 0, 0);
@@ -70,14 +70,14 @@ function calcPresetTime(value: string, s: TimeSettings): { start: Date; end: Dat
       break;
     }
     default: {
-      // 「指定なし」→ 基本設定の quickMemoSaveHour
+      // 「指定なし（default）」→ 基本設定の quickMemoSaveHour (本日の〇時)
       start.setHours(s.quickMemoSaveHour, 0, 0, 0);
       break;
     }
   }
 
   const end = new Date(start);
-  end.setHours(start.getHours() + 1, start.getMinutes(), 0, 0);
+  end.setHours(start.getHours() + 1, 0, 0, 0);
   return { start, end };
 }
 
@@ -107,6 +107,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
     setText: React.Dispatch<React.SetStateAction<string>>,
     inputRef?: React.RefObject<HTMLInputElement | null>
   ) => {
+    // 空欄（□ のみ）の場合は保存しない
     const trimmed = text.replace(/^[□☑]\s*/, '').trim();
     if (!trimmed) return;
 
@@ -114,22 +115,35 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
 
     const newEvent: CalendarEvent = {
       id: `evt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      title: `□ ${trimmed}`,
+      // 入力された文字（「□国語の勉強」など）をそのままタイトルにする
+      title: text.trim(),
       start,
       end,
-      memo: '',
+      memo: '', // その他内容などの記載はしない (空文字)
       status: 'unchecked',
       isBatch: false,
     };
 
     onSave(newEvent);
-    setText('□');
+    setText('□'); // 次のためにリセット
     setTimePreset('default');
 
     if (inputRef) {
       setTimeout(() => focusAfterCheckbox(inputRef.current), 0);
     }
   }, [timePreset, settings, onSave]);
+
+  const buildInputChangeHandler = (setter: React.Dispatch<React.SetStateAction<string>>) => {
+    return (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      // 万が一「□」が消された場合は強制補完
+      if (!val.startsWith('□') && !val.startsWith('☑')) {
+        setter('□' + val);
+      } else {
+        setter(val);
+      }
+    };
+  };
 
   const presets = buildPresets(settings);
 
@@ -170,7 +184,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
           className="text-input"
           placeholder="□やること 1"
           value={text1}
-          onChange={(e) => setText1(e.target.value)}
+          onChange={buildInputChangeHandler(setText1)}
           onKeyDown={(e) => e.key === 'Enter' && handleSaveField(text1, setText1, inputRef1)}
         />
         <button className="btn btn-primary" onClick={() => handleSaveField(text1, setText1, inputRef1)}>
@@ -185,7 +199,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
           className="text-input"
           placeholder="□やること 2"
           value={text2}
-          onChange={(e) => setText2(e.target.value)}
+          onChange={buildInputChangeHandler(setText2)}
           onKeyDown={(e) => e.key === 'Enter' && handleSaveField(text2, setText2)}
         />
         <button className="btn btn-primary" onClick={() => handleSaveField(text2, setText2)}>
@@ -200,7 +214,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
           className="text-input"
           placeholder="□やること 3"
           value={text3}
-          onChange={(e) => setText3(e.target.value)}
+          onChange={buildInputChangeHandler(setText3)}
           onKeyDown={(e) => e.key === 'Enter' && handleSaveField(text3, setText3)}
         />
         <button className="btn btn-primary" onClick={() => handleSaveField(text3, setText3)}>

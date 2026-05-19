@@ -127,10 +127,11 @@ function App() {
           const tasksToComplete = currentEvents.filter(e => mergedTaskIds.includes(e.id));
           
           for (const task of tasksToComplete) {
-            if (task.title.startsWith('□')) {
+            const currentTitle = task.title || '';
+            if (currentTitle.startsWith('□')) {
               const updatedTask: CalendarEvent = {
                 ...task,
-                title: task.title.replace(/^□/, '☑'),
+                title: currentTitle.replace(/^□/, '☑'),
                 status: 'checked'
               };
               await updateGoogleEvent(accessToken, updatedTask);
@@ -159,10 +160,11 @@ function App() {
       if (mergedTaskIds.length > 0) {
         const currentEvents = getMockEvents();
         currentEvents.forEach((task) => {
-          if (mergedTaskIds.includes(task.id) && task.title.startsWith('□')) {
+          const currentTitle = task.title || '';
+          if (mergedTaskIds.includes(task.id) && currentTitle.startsWith('□')) {
             updateMockEvent({
               ...task,
-              title: task.title.replace(/^□/, '☑'),
+              title: currentTitle.replace(/^□/, '☑'),
               status: 'checked'
             });
           }
@@ -185,7 +187,7 @@ function App() {
     setShowSettings(false);
   };
 
-  // ── 【修正】「□タスクを⇩□MEMOにする」ボタンを押したときの処理 ──
+  // ── 「□タスクを⇩□MEMOにする」ボタンを押したときの処理 ──
   const handleMergeWeeklyMemos = async () => {
     setIsLoading(true);
     try {
@@ -203,13 +205,14 @@ function App() {
 
       // 2. ＜１＞「□」から始まるタスクを抽出し、＜２＞既に「□MEMO」になっているものは完全に除外
       const targetTasks = currentEvents.filter((e: CalendarEvent) => {
+        if (!e.start) return false;
         const eventDate = new Date(e.start);
         const title = (e.title || '').trim();
         
         // 指定された日付範囲内か
         const isWithinRange = eventDate >= startRange && eventDate <= endRange;
         
-        // 「□」で始まり、かつ「□MEMO」などの一括用タイトルを含まない純粋なタスクか（大文字・小文字両対応）
+        // 「□」で始まり、かつ「□MEMO」などの一括用タイトルを含まない純粋なタスクか（タイトル空防御付き）
         const isPureTask = 
           title.startsWith('□') && 
           !title.toUpperCase().includes('MEMO') && 
@@ -225,7 +228,7 @@ function App() {
       }
 
       // 3. 集めたタスクのタイトルを1行ずつの箇条書きテキスト（内容欄用）にする
-      const memoLines = targetTasks.map((t: CalendarEvent) => t.title.trim());
+      const memoLines = targetTasks.map((t: CalendarEvent) => (t.title || '').trim());
       const memoContent = memoLines.join('\n');
 
       // 4. 設定画面の「□MEMO保存本日の〇時」の時刻を作成
@@ -254,14 +257,14 @@ function App() {
 
     } catch (error) {
       console.error(error);
-      alert("処理中にエラーが発生しました。");
+      alert("処理中にエラーが発生しました。カレンダーデータの一部に不整合がある可能性があります。");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSelectOldestMemo = () => {
-    const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
+    const memoEvents = events.filter(e => (e.title || '').toUpperCase().includes('MEMO') || e.isBatch);
     if (memoEvents.length === 0) return;
     const oldest = memoEvents.reduce((old, current) => new Date(current.start) < new Date(old.start) ? current : old);
     setSelectedEvent(oldest);
@@ -272,7 +275,7 @@ function App() {
   };
 
   const handleSelectLatestMemo = () => {
-    const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
+    const memoEvents = events.filter(e => (e.title || '').toUpperCase().includes('MEMO') || e.isBatch);
     if (memoEvents.length === 0) return;
     const latest = memoEvents.reduce((lat, current) => new Date(current.start) > new Date(lat.start) ? current : lat);
     setSelectedEvent(latest);
