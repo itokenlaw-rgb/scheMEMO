@@ -130,11 +130,10 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     startResize(e.clientY, e.target as HTMLElement);
   };
 
-  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length > 0) {
-      const started = startResize(e.touches[0].clientY, e.target as HTMLElement);
-      // 日付マス以外が触られた（startedがfalse）場合は、e.preventDefault() を呼んだりしないため、
-      // そのままブラウザ標準の動作（画面スクロール）が機能します。
+      // 変数 (const started =) を削除し、関数を呼び出すだけにします
+      startResize(e.touches[0].clientY, e.target as HTMLElement);
     }
   };
 
