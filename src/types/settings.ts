@@ -2,23 +2,15 @@
 
 export interface TimeSettings {
   // ── 【基本設定】 ──────────────────────────────────────────────
-  // クイックメモ「保存」の時刻（本日の〇時）
   quickMemoSaveHour: number;        // 0-23、デフォルト 21
-  // □MEMO「保存」の時刻（本日の〇時）
   batchMemoSaveHour: number;        // 0-23、デフォルト 21
 
   // ── 【クイックメモの時間指定保存】 ──────────────────────────
-  // ① 〇時間後
   preset1HoursLater: number;        // 0-24、デフォルト 3
-  // ② 今日の〇時
   preset2TodayHour: number;         // 0-23、デフォルト 21
-  // ③ 明日の〇時
   preset3TomorrowHour: number;      // 0-23、デフォルト 9
-  // ④ 明日の〇時（夜）
   preset4TomorrowNightHour: number; // 0-23、デフォルト 21
-  // ⑤ 3日後の〇時
   preset5In3DaysHour: number;       // 0-23、デフォルト 9
-  // ⑥ 土曜日の〇時
   preset6SaturdayHour: number;      // 0-23、デフォルト 9
 
   // ── 【「□タスクを□MEMOにする」抽出範囲】 ─────────────────
@@ -29,17 +21,11 @@ export interface TimeSettings {
   memoDaysBefore: number;           // 0-15
   memoDaysAfter: number;            // 0-15
 
-  // ── 【☑□保存 の場合】 ────────────────────────────────────────
-  saveDeletePastCompleted: boolean;
-  saveDeleteFutureCompleted: boolean;
-
-  // ── 【☑更新□ の場合】 ───────────────────────────────────────
-  updateDeletePastCompleted: boolean;
-  updateDeleteFutureCompleted: boolean;
-
-  // 旧互換フィールド（削除しない）
-  deletePastCompleted?: boolean;
-  deleteFutureCompleted?: boolean;
+  // ── 【修正：削除ではなくグレー表示にするフラグに変更】 ───────
+  saveGrayPastCompleted: boolean;
+  saveGrayFutureCompleted: boolean;
+  updateGrayPastCompleted: boolean;
+  updateGrayFutureCompleted: boolean;
 }
 
 export const DEFAULT_TIME_SETTINGS: TimeSettings = {
@@ -59,10 +45,11 @@ export const DEFAULT_TIME_SETTINGS: TimeSettings = {
   memoDaysBefore: 7,
   memoDaysAfter: 7,
 
-  saveDeletePastCompleted: false,
-  saveDeleteFutureCompleted: false,
-  updateDeletePastCompleted: false,
-  updateDeleteFutureCompleted: false,
+  // デフォルトはすべて安全に「完了したものは色を変える（グレー）」を有効に
+  saveGrayPastCompleted: true,
+  saveGrayFutureCompleted: true,
+  updateGrayPastCompleted: true,
+  updateGrayFutureCompleted: true,
 };
 
 export function loadSettings(): TimeSettings {

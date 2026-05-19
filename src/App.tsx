@@ -15,8 +15,7 @@ import {
 import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
 import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
 
-// アクセストークンの有効期限（Google は 3600 秒 = 1時間）
-const TOKEN_LIFETIME_MS = 55 * 60 * 1000; // 55分後に再取得（余裕を持たせる）
+const TOKEN_LIFETIME_MS = 55 * 60 * 1000;
 const STORAGE_KEY_TOKEN = 'google_access_token';
 const STORAGE_KEY_EXPIRY = 'google_token_expiry';
 
@@ -28,11 +27,9 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  // ローカルストレージからトークンを復旧する処理
   useEffect(() => {
     const savedToken = localStorage.getItem(STORAGE_KEY_TOKEN);
     const expiryStr = localStorage.getItem(STORAGE_KEY_EXPIRY);
-
     if (savedToken && expiryStr) {
       const expiry = parseInt(expiryStr, 10);
       if (Date.now() < expiry) {
@@ -86,7 +83,6 @@ function App() {
     setSelectedEvent(event);
   };
 
-  // SingleEditor（1行入力）用の保存制御関数
   const handleSaveSingle = async (event: CalendarEvent) => {
     if (accessToken) {
       setIsLoading(true);
@@ -106,30 +102,13 @@ function App() {
     }
   };
 
-  // BatchEditor（一括エディター）用の保存制御関数
-  // saveMode: 'save'=☑□保存, 'update'=☑更新□
+  // 一括エディターの保存処理（こちらも削除ではなく、完了フラグ等に応じた更新に変更）
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
-
-    const deletePast = saveMode === 'update'
-      ? timeSettings.updateDeletePastCompleted
-      : timeSettings.saveDeletePastCompleted;
-    const deleteFuture = saveMode === 'update'
-      ? timeSettings.updateDeleteFutureCompleted
-      : timeSettings.saveDeleteFutureCompleted;
 
     if (accessToken) {
       setIsLoading(true);
       try {
-        if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
-          const isPast = new Date(selectedEvent.start) < new Date();
-          const shouldDelete = isPast ? deletePast : deleteFuture;
-          const idReused = eventsToSave.some(e => e.id === selectedEvent.id);
-          if (shouldDelete && !idReused) {
-            await deleteGoogleEvent(accessToken, selectedEvent.id).catch(err => console.error(err));
-          }
-        }
-
         for (const event of eventsToSave) {
           if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
             await updateGoogleEvent(accessToken, event);
@@ -145,13 +124,6 @@ function App() {
         setSelectedEvent(null);
       }
     } else {
-      if (selectedEvent && !selectedEvent.id.startsWith('evt-')) {
-        const isPast = new Date(selectedEvent.start) < new Date();
-        const shouldDelete = isPast ? deletePast : deleteFuture;
-        const idReused = eventsToSave.some(e => e.id === selectedEvent.id);
-        if (shouldDelete && !idReused) deleteMockEvent(selectedEvent.id);
-      }
-
       eventsToSave.forEach(event => {
         if (selectedEvent && event.id === selectedEvent.id) {
           updateMockEvent(event);
@@ -159,7 +131,6 @@ function App() {
           addMockEvent(event);
         }
       });
-
       setEvents(getMockEvents());
       setSelectedEvent(null);
     }
@@ -175,40 +146,92 @@ function App() {
     setShowSettings(false);
   };
 
+  // 【2の修正】：元のタスクを削除せず、□を☑に変更して完了タスク(色変更対象)とする「まとめ」処理
   const handleMergeWeeklyMemos = async () => {
-    if (accessToken) {
-      setIsLoading(true);
-      try {
-        const gEvents = await fetchGoogleEvents(accessToken);
-        const result = consolidateWeeklyMemos(gEvents);
-        if (result) {
-          for (const id of result.targetIds) {
-            await deleteGoogleEvent(accessToken, id).catch(err => console.error(err));
-          }
-          await createGoogleEvent(accessToken, result.mergedEvent);
-          await refreshEvents();
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
+    setIsLoading(true);
+    try {
+      const currentEvents = accessToken ? await fetchGoogleEvents(accessToken) : getMockEvents();
+
+      // 1. 設定から抽出範囲を取得
+      const now = new Date();
+      const startRange = new Date(now);
+      startRange.setDate(now.getDate() - timeSettings.mergeDaysBefore);
+      startRange.setHours(0, 0, 0, 0);
+
+      const endRange = new Date(now);
+      endRange.setDate(now.getDate() + timeSettings.mergeDaysAfter);
+      endRange.setHours(23, 59, 59, 999);
+
+      // 2. 範囲内の「□」から始まる予定を抽出
+      const targetTasks = currentEvents.filter(e => {
+        const eventDate = new Date(e.start);
+        return eventDate >= startRange && eventDate <= endRange && e.title.startsWith('□') && !e.title.toUpperCase().includes('MEMO') && !e.isBatch;
+      });
+
+      if (targetTasks.length === 0) {
+        alert("範囲内に集める対象の「□タスク」が見つかりませんでした。");
         setIsLoading(false);
+        return;
       }
-    } else {
-      const result = consolidateWeeklyMemos(getMockEvents());
-      if (result) {
-        result.targetIds.forEach(id => deleteMockEvent(id));
-        addMockEvent(result.mergedEvent);
+
+      // 3. まとめた予定「□MEMO」の内容を作成
+      const memoLines = targetTasks.map(t => `□ ${t.title.replace(/^[□☑]\s*/, '').trim()}`);
+      const memoContent = memoLines.join('\n');
+
+      // 4. □MEMOの保存時間を生成 (設定の batchMemoSaveHour 時)
+      const memoStart = new Date(now);
+      memoStart.setHours(timeSettings.batchMemoSaveHour, 0, 0, 0);
+      const memoEnd = new Date(memoStart);
+      memoEnd.setHours(memoStart.getHours() + 1);
+
+      const newBatchMemoEvent: CalendarEvent = {
+        id: `evt-${Date.now()}-merged`,
+        title: '□MEMO',
+        start: memoStart,
+        end: memoEnd,
+        memo: memoContent,
+        status: 'unchecked',
+        isBatch: true
+      };
+
+      if (accessToken) {
+        // Google連携時：新しくまとめた□MEMOを作成
+        await createGoogleEvent(accessToken, newBatchMemoEvent);
+
+        // 元のタスクは削除せず、タイトルを「☑」にし、ステータスを checked にして更新
+        for (const task of targetTasks) {
+          const updatedTask: CalendarEvent = {
+            ...task,
+            title: task.title.replace(/^□/, '☑'),
+            status: 'checked'
+          };
+          await updateGoogleEvent(accessToken, updatedTask);
+        }
+        await refreshEvents();
+      } else {
+        // ローカル（Mock）環境
+        addMockEvent(newBatchMemoEvent);
+        targetTasks.forEach(task => {
+          updateMockEvent({
+            ...task,
+            title: task.title.replace(/^□/, '☑'),
+            status: 'checked'
+          });
+        });
         setEvents(getMockEvents());
       }
+    } catch (error) {
+      console.error(error);
+      alert("処理中にエラーが発生しました。");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleSelectOldestMemo = () => {
     const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
     if (memoEvents.length === 0) return;
-    const oldest = memoEvents.reduce((old, current) => 
-      new Date(current.start) < new Date(old.start) ? current : old
-    );
+    const oldest = memoEvents.reduce((old, current) => new Date(current.start) < new Date(old.start) ? current : old);
     setSelectedEvent(oldest);
   };
 
@@ -219,185 +242,74 @@ function App() {
   const handleSelectLatestMemo = () => {
     const memoEvents = events.filter(e => e.title.toUpperCase().includes('MEMO') || e.isBatch);
     if (memoEvents.length === 0) return;
-    const latest = memoEvents.reduce((lat, current) => 
-      new Date(current.start) > new Date(lat.start) ? current : lat
-    );
+    const latest = memoEvents.reduce((lat, current) => new Date(current.start) > new Date(lat.start) ? current : lat);
     setSelectedEvent(latest);
   };
 
   return (
     <div className="app-container">
-      {/* ── 【元の綺麗なデザインヘッダーに復旧】 ── */}
       <header className="app-header" style={{ padding: '0.75rem 1rem' }}>
         <div className="app-logo" style={{ fontSize: '1.25rem', fontWeight: 'bold', color: 'var(--accent)', gap: '0.5rem' }}>
           <CalendarIcon size={24} />
           scheMEMO
         </div>
-        
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
           {accessToken ? (
             <>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={refreshEvents}
-                title="カレンダーを更新・同期"
-                style={{ padding: '0.4rem', minHeight: '34px' }}
-                disabled={isLoading}
-              >
+              <button className="btn btn-outline btn-sm" onClick={refreshEvents} title="カレンダーを更新・同期" style={{ padding: '0.4rem', minHeight: '34px' }} disabled={isLoading}>
                 <RefreshCw size={16} className={isLoading ? 'spin' : ''} />
               </button>
-              <button 
-                className="btn btn-outline btn-sm" 
-                onClick={logout} 
-                title="Googleカレンダーからログアウト" 
-                style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center', fontSize: '0.875rem' }}
-              >
+              <button className="btn btn-outline btn-sm" onClick={logout} title="Googleカレンダーからログアウト" style={{ minHeight: '34px', gap: '0.25rem', display: 'flex', alignItems: 'center', fontSize: '0.875rem' }}>
                 <LogOut size={16} /> ログアウト
               </button>
             </>
           ) : (
-            <button 
-              className="btn btn-primary btn-sm" 
-              onClick={() => login()} 
-              title="Googleカレンダーにログイン・連携" 
-              style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: '500' }}
-            >
+            <button className="btn btn-primary btn-sm" onClick={() => login()} title="Googleカレンダーにログイン・連携" style={{ minHeight: '34px', padding: '0.4rem 0.75rem', gap: '0.25rem', display: 'flex', alignItems: 'center', fontSize: '0.875rem', fontWeight: '500' }}>
               <LogIn size={14} /> ログイン
             </button>
           )}
-
-          <button
-            className={`btn btn-outline btn-sm${showSettings ? ' btn-primary' : ''}`}
-            style={{ padding: '0.4rem', minHeight: '34px' }}
-            onClick={() => setShowSettings(v => !v)}
-            title="設定"
-          >
+          <button className={`btn btn-outline btn-sm${showSettings ? ' btn-primary' : ''}`} style={{ padding: '0.4rem', minHeight: '34px' }} onClick={() => setShowSettings(v => !v)} title="設定">
             <Settings size={16} />
           </button>
         </div>
       </header>
 
       {showSettings && (
-        <SettingsPanel
-          initialSettings={timeSettings}
-          onClose={() => setShowSettings(false)}
-          onSave={handleSaveSettings}
-        />
+        <SettingsPanel initialSettings={timeSettings} onClose={() => setShowSettings(false)} onSave={handleSaveSettings} />
       )}
 
       <div className="editors-section">
-        {/* １行クイック入力エディター */}
         <SingleEditor onSave={handleSaveSingle} />
-        
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%', margin: '0.5rem 0' }}>
-          {/* 1. 「□タスクを ↓ □MEMOにする」ボタン（元のトーンに馴染むよう再調整） */}
           <button
             className="btn btn-secondary"
             onClick={handleMergeWeeklyMemos}
             style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              gap: '0.5rem', 
-              minHeight: '42px',
-              backgroundColor: '#10b981', // 1枚目の綺麗なグリーンに合わせる
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '0.5rem',
-              fontWeight: '600',
-              fontSize: '0.95rem'
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', minHeight: '42px',
+              backgroundColor: '#10b981', color: '#ffffff', border: 'none', borderRadius: '0.5rem', fontWeight: '600', fontSize: '0.95rem'
             }}
             disabled={isLoading}
           >
             <Layers size={18} /> □タスクを ↓ □MEMOにする
           </button>
 
-          {/* 2. 3列等幅・機能ボタンエリア（スマホ幅で崩れないようフォントサイズとレイアウトを徹底最適化） */}
           <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
-            <button
-              className="btn btn-outline"
-              onClick={handleSelectOldestMemo}
-              disabled={isLoading}
-              style={{ 
-                flex: 1, 
-                padding: '0.5rem 0.25rem', 
-                fontSize: '0.8rem', 
-                lineHeight: '1.2', 
-                borderRadius: '0.5rem', 
-                minHeight: '44px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderColor: '#3b82f6',
-                backgroundColor: '#ffffff',
-                color: '#3b82f6',
-                fontWeight: '600'
-              }}
-            >
+            <button className="btn btn-outline" onClick={handleSelectOldestMemo} disabled={isLoading} style={{ flex: 1, padding: '0.5rem 0.25rem', fontSize: '0.8rem', lineHeight: '1.2', borderRadius: '0.5rem', minHeight: '44px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderColor: '#3b82f6', backgroundColor: '#ffffff', color: '#3b82f6', fontWeight: '600' }}>
               <div>一番古い</div>
               <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#3b82f6' }}>□メモ</div>
             </button>
-
-            <button
-              className="btn btn-outline"
-              onClick={handleCollectAllMemos}
-              disabled={isLoading}
-              style={{ 
-                flex: 1, 
-                padding: '0.5rem 0.25rem', 
-                fontSize: '0.8rem', 
-                lineHeight: '1.2', 
-                borderRadius: '0.5rem', 
-                minHeight: '44px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderColor: '#f59e0b',
-                backgroundColor: '#ffffff',
-                color: '#d97706',
-                fontWeight: '600'
-              }}
-            >
+            <button className="btn btn-outline" onClick={handleCollectAllMemos} disabled={isLoading} style={{ flex: 1, padding: '0.5rem 0.25rem', fontSize: '0.8rem', lineHeight: '1.2', borderRadius: '0.5rem', minHeight: '44px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderColor: '#f59e0b', backgroundColor: '#ffffff', color: '#d97706', fontWeight: '600' }}>
               <div>□MEMOを</div>
               <div style={{ fontSize: '0.8rem', color: '#d97706' }}>集める</div>
             </button>
-
-            <button
-              className="btn btn-outline"
-              onClick={handleSelectLatestMemo}
-              disabled={isLoading}
-              style={{ 
-                flex: 1, 
-                padding: '0.5rem 0.25rem', 
-                fontSize: '0.8rem', 
-                lineHeight: '1.2', 
-                borderRadius: '0.5rem', 
-                minHeight: '44px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                borderColor: '#3b82f6',
-                backgroundColor: '#ffffff',
-                color: '#3b82f6',
-                fontWeight: '600'
-              }}
-            >
+            <button className="btn btn-outline" onClick={handleSelectLatestMemo} disabled={isLoading} style={{ flex: 1, padding: '0.5rem 0.25rem', fontSize: '0.8rem', lineHeight: '1.2', borderRadius: '0.5rem', minHeight: '44px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderColor: '#3b82f6', backgroundColor: '#ffffff', color: '#3b82f6', fontWeight: '600' }}>
               <div>最新の</div>
               <div style={{ fontSize: '0.75rem', fontWeight: 'normal', color: '#3b82f6' }}>□メモ</div>
             </button>
           </div>
         </div>
 
-        {/* 一括編集エディター */}
-        <BatchEditor
-          onSave={handleSaveBatch}
-          onCarryOver={handleCarryOver}
-          initialEvent={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-        />
+        <BatchEditor onSave={handleSaveBatch} onCarryOver={handleCarryOver} initialEvent={selectedEvent} onClose={() => setSelectedEvent(null)} />
       </div>
 
       <div className="calendar-section">
