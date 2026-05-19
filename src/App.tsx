@@ -103,8 +103,6 @@ function App() {
 
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
-
-    // 将来の拡張や設定値参照用に saveMode のログを出力（未使用エラー対策を兼ねる）
     console.log(`Saving batch in mode: ${saveMode}`);
 
     if (accessToken) {
@@ -147,12 +145,16 @@ function App() {
     setShowSettings(false);
   };
 
+  // ── 【修正・実装】「□タスクを⇩□MEMOにする」の統合ロジック ──
   const handleMergeWeeklyMemos = async () => {
     setIsLoading(true);
     try {
+      // 最新のイベント一覧を取得
       const currentEvents = accessToken ? await fetchGoogleEvents(accessToken) : getMockEvents();
 
+      // 1. 抽出範囲（日前・日後）をDate型で厳密に計算
       const now = new Date();
+      
       const startRange = new Date(now);
       startRange.setDate(now.getDate() - timeSettings.mergeDaysBefore);
       startRange.setHours(0, 0, 0, 0);
@@ -161,22 +163,31 @@ function App() {
       endRange.setDate(now.getDate() + timeSettings.mergeDaysAfter);
       endRange.setHours(23, 59, 59, 999);
 
-      // 型エラー修正: 引数 e に型を指定
+      // 2. 範囲内の予定から「□」で始まるタスクだけを集める（既存の「□MEMO」自体は除外）
       const targetTasks = currentEvents.filter((e: CalendarEvent) => {
         const eventDate = new Date(e.start);
-        return eventDate >= startRange && eventDate <= endRange && e.title.startsWith('□') && !e.title.toUpperCase().includes('MEMO') && !e.isBatch;
+        const title = e.title || '';
+        
+        // 日付が範囲内、かつ「□」から始まり、タイトルそのものが「□MEMO」ではないもの
+        return (
+          eventDate >= startRange &&
+          eventDate <= endRange &&
+          title.startsWith('□') &&
+          title.trim() !== '□MEMO'
+        );
       });
 
       if (targetTasks.length === 0) {
-        alert("範囲内に集める対象の「□タスク」が見つかりませんでした。");
+        alert("設定された抽出範囲内に、対象となる「□」から始まるタスクが見つかりませんでした。");
         setIsLoading(false);
         return;
       }
 
-      // 型エラー修正: 引数 t に型を指定
-      const memoLines = targetTasks.map((t: CalendarEvent) => `□ ${t.title.replace(/^[□☑]\s*/, '').trim()}`);
+      // 3. 集めたタイトルの文字をそのまま1行ずつの箇条書きテキストにする
+      const memoLines = targetTasks.map((t: CalendarEvent) => t.title.trim());
       const memoContent = memoLines.join('\n');
 
+      // 4. まとめた予定「□MEMO」の時間を設定（基本設定の □MEMO保存 本日の〇時）
       const memoStart = new Date(now);
       memoStart.setHours(timeSettings.batchMemoSaveHour, 0, 0, 0);
       const memoEnd = new Date(memoStart);
@@ -192,10 +203,12 @@ function App() {
         isBatch: true
       };
 
+      // 5. カレンダーへの反映（Google連携 / ローカル環境）
       if (accessToken) {
+        // 新しい「□MEMO」を作成
         await createGoogleEvent(accessToken, newBatchMemoEvent);
 
-        // 型エラー修正: 引数 task に型を指定
+        // 元のタスクを「削除」せず、タイトルを「☑」へ書き換えて更新
         for (const task of targetTasks) {
           const updatedTask: CalendarEvent = {
             ...task,
@@ -206,6 +219,7 @@ function App() {
         }
         await refreshEvents();
       } else {
+        // ローカル（Mock）環境の処理
         addMockEvent(newBatchMemoEvent);
         targetTasks.forEach((task: CalendarEvent) => {
           updateMockEvent({
@@ -216,9 +230,12 @@ function App() {
         });
         setEvents(getMockEvents());
       }
+
+      alert(`「□タスク」を1つにまとめ、元のタスクを完了に変更しました。\n（合計 ${targetTasks.length} 件を統合）`);
+
     } catch (error) {
       console.error(error);
-      alert("処理中にエラーが発生しました。");
+      alert("処理中にエラーが発生しました。設定や通信状況を確認してください。");
     } finally {
       setIsLoading(false);
     }
