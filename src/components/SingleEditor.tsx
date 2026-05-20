@@ -29,7 +29,7 @@ function nextOrThisSaturday(from: Date): Date {
 /** 設定値をもとにプリセット選択肢のラベルを生成 */
 function buildPresets(s: TimeSettings) {
   return [
-    { label: '-時間指定保存-', value: 'default' },
+    { label: '［時間指定保存］', value: 'default' },
     { label: `${s.preset1HoursLater}時間後`, value: 'p1' },
     { label: `今日の ${s.preset2TodayHour}時`, value: 'p2' },
     { label: `明日の ${s.preset3TomorrowHour}時`, value: 'p3' },
@@ -70,7 +70,6 @@ function calcPresetTime(value: string, s: TimeSettings): { start: Date; end: Dat
       break;
     }
     default: {
-      // 基本設定の quickMemoSaveHour (本日の〇時)
       start.setHours(s.quickMemoSaveHour, 0, 0, 0);
       break;
     }
@@ -101,7 +100,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
     return () => clearTimeout(id);
   }, []);
 
-  // 右横の単体「保存」ボタン：常に「本日の21時（設定値）」に保存
+  // 右横の単体「保存」ボタン
   const handleSaveField = useCallback((
     text: string,
     setText: React.Dispatch<React.SetStateAction<string>>,
@@ -110,7 +109,6 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
     const trimmed = text.replace(/^[□☑]\s*/, '').trim();
     if (!trimmed) return;
 
-    // 単体保存ボタンは常に基本設定の「本日の〇時」に保存するため、'default' を明示
     const { start, end } = calcPresetTime('default', settings);
 
     const newEvent: CalendarEvent = {
@@ -131,48 +129,45 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
     }
   }, [settings, onSave]);
 
-  // 【２の修正】：下部の「時間指定保存」ボタンをクリックした時の一括登録処理
-  const handlePresetSaveAll = () => {
-    if (timePreset === 'default') {
-      alert('保存する時間（プリセット）を選択してください。');
-      return;
-    }
+  // 【修正】：プルダウンの選択肢が「変更（クリック選択）されたとき」に直接呼び出す一括登録処理
+  const handleSelectPresetDirectly = (presetValue: string) => {
+    if (presetValue === 'default') return;
 
-    // 入力欄1〜3のテキストを配列にまとめる
     const fields = [
       { text: text1, setter: setText1 },
       { text: text2, setter: setText2 },
       { text: text3, setter: setText3 }
     ];
 
-    // 「□」以外の文字が実際に入力されているものだけを抽出
+    // 入力があるタスクのみを対象にする
     const validFields = fields.filter(f => f.text.replace(/^[□☑]\s*/, '').trim().length > 0);
 
     if (validFields.length === 0) {
-      alert('時間指定保存するタスクを入力欄に記入してください。');
+      alert('時間指定保存するタスクを入力欄に記入してから、選択肢を選んでください。');
+      setTimePreset('default');
       return;
     }
 
-    // 選択されたプリセット時間（「明日の21時」など）を計算
-    const { start, end } = calcPresetTime(timePreset, settings);
+    // 選択された時間（presetValue）で時間を算出
+    const { start, end } = calcPresetTime(presetValue, settings);
 
-    // 有効な入力内容を1つずつ、そのタイトルの予定としてループ保存
+    // カレンダーへ1つずつ登録
     validFields.forEach((field, index) => {
       const newEvent: CalendarEvent = {
         id: `evt-${Date.now()}-preset-${index}-${Math.random().toString(36).substring(2, 5)}`,
-        title: field.text.trim(), // 記入欄の文字列（例: □ABC）をそのままタイトルにする
+        title: field.text.trim(),
         start: new Date(start),
         end: new Date(end),
-        memo: '', // 内容は何も記載しない
+        memo: '',
         status: 'unchecked',
         isBatch: false,
       };
       onSave(newEvent);
-      field.setter('□'); // 入力欄をクリア
+      field.setter('□');
     });
 
-    setTimePreset('default'); // プルダウンをリセット
-    alert('選択した時間指定で、すべてのタスクを1つずつカレンダーに登録しました。');
+    setTimePreset('default'); // プルダウンの表示を「-えらんで時間指定保存-」に戻す
+    alert('選択した時間指定でカレンダーに登録しました。');
     setTimeout(() => focusAfterCheckbox(inputRef1.current), 0);
   };
 
@@ -243,13 +238,17 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
         </button>
       </div>
 
-      {/* 【２の修正】：下部に配置した時間指定保存用のプルダウンとボタンエリア */}
+      {/* 【修正】：プルダウン単体にして、選んだ瞬間に登録される仕様へ変更 */}
       <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', backgroundColor: 'rgba(0,0,0,0.03)', padding: '6px 10px', borderRadius: '6px', flex: 1, border: '1px solid var(--border)' }}>
           <Clock size={14} style={{ opacity: 0.6 }} />
           <select
             value={timePreset}
-            onChange={(e) => setTimePreset(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setTimePreset(val);
+              handleSelectPresetDirectly(val); // 選択された瞬間に登録処理をキック
+            }}
             style={{
               border: 'none',
               background: 'transparent',
@@ -257,7 +256,8 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
               color: 'inherit',
               cursor: 'pointer',
               outline: 'none',
-              width: '100%'
+              width: '100%',
+              fontWeight: '500'
             }}
           >
             {presets.map(p => (
@@ -265,14 +265,6 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
             ))}
           </select>
         </div>
-        <button 
-          className="btn btn-secondary" 
-          onClick={handlePresetSaveAll}
-          disabled={timePreset === 'default'}
-          style={{ gap: '0.25rem', minHeight: '38px', padding: '0 1rem' }}
-        >
-          時間指定保存
-        </button>
       </div>
     </div>
   );
