@@ -129,7 +129,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
     }
   }, [settings, onSave]);
 
-  // 【修正】：プルダウンの選択肢が「変更（クリック選択）されたとき」に直接呼び出す一括登録処理
+  // プルダウンの選択肢が変更されたときに直接呼び出す一括登録処理
   const handleSelectPresetDirectly = (presetValue: string) => {
     if (presetValue === 'default') return;
 
@@ -148,10 +148,8 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
       return;
     }
 
-    // 選択された時間（presetValue）で時間を算出
     const { start, end } = calcPresetTime(presetValue, settings);
 
-    // カレンダーへ1つずつ登録
     validFields.forEach((field, index) => {
       const newEvent: CalendarEvent = {
         id: `evt-${Date.now()}-preset-${index}-${Math.random().toString(36).substring(2, 5)}`,
@@ -166,7 +164,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
       field.setter('□');
     });
 
-    setTimePreset('default'); // プルダウンの表示を「-えらんで時間指定保存-」に戻す
+    setTimePreset('default'); // プルダウンの表示を初期状態に戻す
     alert('選択した時間指定でカレンダーに登録しました。');
     setTimeout(() => focusAfterCheckbox(inputRef1.current), 0);
   };
@@ -187,9 +185,45 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
   return (
     <div className="card single-editor" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
 
-      {/* ヘッダー */}
+      {/* ヘッダー：【１】タイトル「クイックメモ」の右端に時間指定保存の選択肢を配置 */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: '0.25rem' }}>
         <h2 className="card-title" style={{ margin: 0 }}>クイックメモ</h2>
+
+        {/* 【２】背景色と文字色を保存ボタン（btn-primary）と同じ色調に変更 */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '0.25rem', 
+          backgroundColor: 'var(--primary)', 
+          color: '#ffffff',
+          padding: '5px 10px', 
+          borderRadius: '6px' 
+        }}>
+          <Clock size={14} style={{ opacity: 0.9 }} />
+          <select
+            value={timePreset}
+            onChange={(e) => {
+              const val = e.target.value;
+              setTimePreset(val);
+              handleSelectPresetDirectly(val);
+            }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              fontSize: '0.85rem',
+              color: '#ffffff',
+              cursor: 'pointer',
+              outline: 'none',
+              fontWeight: '600'
+            }}
+          >
+            {presets.map(p => (
+              <option key={p.value} value={p.value} style={{ color: 'var(--text-main)', backgroundColor: '#ffffff' }}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* 入力欄 1 */}
@@ -236,35 +270,6 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
         <button className="btn btn-primary" onClick={() => handleSaveField(text3, setText3)}>
           <Save size={18} /> 保存
         </button>
-      </div>
-
-      {/* 【修正】：プルダウン単体にして、選んだ瞬間に登録される仕様へ変更 */}
-      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', borderTop: '1px solid var(--border)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', backgroundColor: 'rgba(0,0,0,0.03)', padding: '6px 10px', borderRadius: '6px', flex: 1, border: '1px solid var(--border)' }}>
-          <Clock size={14} style={{ opacity: 0.6 }} />
-          <select
-            value={timePreset}
-            onChange={(e) => {
-              const val = e.target.value;
-              setTimePreset(val);
-              handleSelectPresetDirectly(val); // 選択された瞬間に登録処理をキック
-            }}
-            style={{
-              border: 'none',
-              background: 'transparent',
-              fontSize: '0.85rem',
-              color: 'inherit',
-              cursor: 'pointer',
-              outline: 'none',
-              width: '100%',
-              fontWeight: '500'
-            }}
-          >
-            {presets.map(p => (
-              <option key={p.value} value={p.value}>{p.label}</option>
-            ))}
-          </select>
-        </div>
       </div>
     </div>
   );
