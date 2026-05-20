@@ -187,7 +187,7 @@ function App() {
     setShowSettings(false);
   };
 
-  // ── 「□タスクを⇩□MEMOにする」ボタンを押したときの処理 ──
+// ── 「□タスクを⇩□MEMOにする」ボタンを押したときの処理 ──
   const handleMergeWeeklyMemos = async () => {
     setIsLoading(true);
     try {
