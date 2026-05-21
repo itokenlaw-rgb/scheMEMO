@@ -11,7 +11,6 @@ interface BatchEditorProps {
   onCarryOver: (items: BatchItem[], timeOption: TimeOption) => void;
   initialEvent: CalendarEvent | null;
   onClose: () => void;
-  // ★ TypeScriptのエラーを解消するためにプロパティ定義を追加
   onDeleteCheckedTasks: () => void;
   onDeleteCheckedMemos: () => void;
 }
@@ -21,8 +20,8 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
   onCarryOver: _onCarryOver, 
   initialEvent, 
   onClose,
-  onDeleteCheckedTasks, // ★ 分割代入で受け取る
-  onDeleteCheckedMemos  // ★ 分割代入で受け取る
+  onDeleteCheckedTasks, 
+  onDeleteCheckedMemos  
 }) => {
   const [items, setItems] = useState<BatchItem[]>([]);
   const [memoTitle, setMemoTitle] = useState('□MEMO');
@@ -150,7 +149,8 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
     setItems(items.filter(item => item.id !== id));
   };
 
-  const get21PMTime = (baseDate: Date = new Date()) => {
+  // 🌟 修正: 引数で渡された基準日(元の予定の日付)から設定時刻を計算する
+  const get21PMTime = (baseDate: Date) => {
     const hour = loadSettings().batchMemoSaveHour ?? 21;
     const start = new Date(baseDate);
     start.setHours(hour, 0, 0, 0);
@@ -170,13 +170,14 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
     const validItems = items.filter(item => item.text.replace(/^[□☑\s]*/, '').trim() !== '');
     if (validItems.length === 0) return;
 
-    const start = initialEvent ? new Date(initialEvent.start) : new Date();
-    const end = initialEvent ? new Date(initialEvent.end) : new Date(Date.now() + 60 * 60 * 1000);
+    // 🌟 修正: カレンダーの元の「□タスク」の日付を確実に取得してベースにする
+    const baseDate = initialEvent && initialEvent.start ? new Date(initialEvent.start) : new Date();
+    const { start, end } = get21PMTime(baseDate);
 
     const memo = buildMemoString(validItems);
 
     onSave({
-      id: initialEvent && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-saved`,
+      id: `evt-${Date.now()}-saved`, // 🌟 修正: 元の□タスクはApp.tsx側で削除されるので、競合を防ぐため常に新IDを発行
       title: memoTitle,
       start,
       end,
@@ -192,7 +193,9 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
     const validItems = items.filter(item => item.text.replace(/^[□☑\s]*/, '').trim() !== '');
     if (validItems.length === 0) return;
 
-    const { start, end } = get21PMTime(new Date());
+    // 🌟 修正: 分けて更新の際も、開いているタスクの「日付」をベースにする
+    const baseDate = initialEvent && initialEvent.start ? new Date(initialEvent.start) : new Date();
+    const { start, end } = get21PMTime(baseDate);
     const checkedItems = validItems.filter(i => i.checked);
     const uncheckedItems = validItems.filter(i => !i.checked);
 
@@ -200,7 +203,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
 
     if (checkedItems.length > 0) {
       eventsToSave.push({
-        id: initialEvent && isTitleChecked && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-chkd`,
+        id: `evt-${Date.now()}-chkd`,
         title: '☑MEMO',
         start,
         end,
@@ -212,7 +215,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
 
     if (uncheckedItems.length > 0) {
       eventsToSave.push({
-        id: initialEvent && !isTitleChecked && !initialEvent.id.startsWith('evt-') ? initialEvent.id : `evt-${Date.now()}-unchkd`,
+        id: `evt-${Date.now()}-unchkd`,
         title: '□MEMO',
         start,
         end,
@@ -229,9 +232,23 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
     cleanupEditor();
   };
 
+  // 🌟 追記: Ctrl + Enter (または Macの Cmd + Enter) で「そのまま保存」を走らせる
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveOriginalTime();
+    }
+  };
+
   const cleanupEditor = () => {
     setMemoTitle('□MEMO');
     setIsTitleChecked(false);
+    // 🌟 追記: エディター内の表示をまっさらに初期化する
+    setItems([
+      { id: `item-1`, text: '□　', checked: false },
+      { id: `item-2`, text: '□　', checked: false },
+      { id: `item-3`, text: '□　', checked: false },
+    ]);
     onClose();
   };
 
@@ -251,6 +268,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
           className="text-input"
           value={memoTitle}
           onChange={(e) => setMemoTitle(e.target.value)}
+          onKeyDown={handleKeyDown} // 🌟 タイトル欄でのCtrl+Enter検知
           style={{ 
             fontWeight: 700, 
             fontSize: '1.1rem', 
@@ -318,6 +336,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({
                 className="text-input"
                 value={item.text}
                 onChange={(e) => handleTextChange(item.id, e.target.value)}
+                onKeyDown={handleKeyDown} // 🌟 タスク各行でのCtrl+Enter検知
                 placeholder="□　やること"
                 style={{ 
                   textDecoration: (item.checked && hasText) ? 'line-through' : 'none', 
