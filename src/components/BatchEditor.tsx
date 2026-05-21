@@ -383,7 +383,7 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver: _
 
         {initialEvent && (
           <button className="btn btn-outline" onClick={onClose} style={{ minHeight: '44px' }}>
-            キャンセル
+            元に戻す
           </button>
         )}
       </div>

@@ -271,14 +271,39 @@ function App() {
     }
   };
 
+// ─── 【修正】「一番古いメモ」ボタンを押したときの処理 ───
   const handleSelectOldestMemo = () => {
-    const memoEvents = events.filter(e => (e.title || '').toUpperCase().includes('MEMO') || e.isBatch);
-    if (memoEvents.length === 0) return;
-    const oldest = memoEvents.reduce((old, current) => new Date(current.start) < new Date(old.start) ? current : old);
-    setSelectedEvent(oldest);
+    // 1. タイトルに「MEMO」が含まれる、または isBatch が true の予定を抽出
+    // ★【仕様変更】すでに「☑」から始まる完了済みのメモは [!e.title.startsWith('☑')] で完全に除外します
+    const activeMemoEvents = events.filter(e => {
+      const title = (e.title || '').trim();
+      const isMemo = title.toUpperCase().includes('MEMO') || e.isBatch;
+      const isCompleted = title.startsWith('☑');
+      return isMemo && !isCompleted;
+    });
+
+    if (activeMemoEvents.length === 0) {
+      alert("未完了の「□MEMO」が見つかりませんでした。");
+      return;
+    }
+
+    // 2. 残った未完了メモの中から、開始時刻が一番古いものを取得
+    const oldestMemo = activeMemoEvents.reduce((old, current) => 
+      new Date(current.start) < new Date(old.start) ? current : old
+    );
+
+    // 3. ★【仕様変更】エディターで表示するときに、確実に最初からチェックが外れた状態（□MEMO）にするための変換
+    const cleanTitle = oldestMemo.title.replace(/^[□☑△]\s*/, '').trim();
+    const preparedMemoEvent: CalendarEvent = {
+      ...oldestMemo,
+      title: `□ ${cleanTitle}`, // タイトルの先頭を強制的に「□」にする
+      status: 'unchecked'       // ステートを未チェック状態にする
+    };
+
+    // 4. 調整したイベントをエディターへセットして展開
+    setSelectedEvent(preparedMemoEvent);
   };
 
-// src/App.tsx の該当箇所を書き換え
 
   const handleCollectAllMemos = () => {
     setIsLoading(true);
