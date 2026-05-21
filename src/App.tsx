@@ -9,11 +9,12 @@ import type { CalendarEvent, BatchItem } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
 import {
-  getMockEvents, addMockEvent, updateMockEvent, deleteMockEvent
+  getMockEvents, addMockEvent, deleteMockEvent // 🌟 'updateMockEvent' を削除
 } from './utils/calendarUtils';
-import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
+import { fetchGoogleEvents, createGoogleEvent, deleteGoogleEvent } from './api/googleCalendar'; // 🌟 'updateGoogleEvent' を削除
 import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
 
+// --- (以下、残りの関数やロジックは一切変更なしでそのままお使いください) ---
 const TOKEN_LIFETIME_MS = 55 * 60 * 1000;
 const STORAGE_KEY_TOKEN = 'google_access_token';
 const STORAGE_KEY_EXPIRY = 'google_token_expiry';
