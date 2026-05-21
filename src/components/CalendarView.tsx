@@ -1,5 +1,5 @@
 // src/components/CalendarView.tsx
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar';
 import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { ja } from 'date-fns/locale';
@@ -63,18 +63,44 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
   const handleSelectEvent = useCallback((event: CalendarEvent) => {
     const cleanTitle = (event.title || '').replace(/\s+/g, '').toUpperCase();
     const isMemoOrSingleTask = event.isBatch || cleanTitle.includes('MEMO') || event.title.startsWith('□') || event.title.startsWith('☑');
-    if (isMemoOrSingleTask) {
+    
+    // イベント伝播を防ぎ、直後のドキュメントクリックで即座に閉じないように、少し遅らせてポップアップを開く
+    setTimeout(() => {
+      if (isMemoOrSingleTask) {
+        setPopupEvent(event);
+        onSelectEvent(event);
+        return;
+      }
       setPopupEvent(event);
-      onSelectEvent(event);
-      return;
-    }
-    setPopupEvent(event);
+    }, 0);
   }, [onSelectEvent]);
+
+  // ─── ポップアップの外側操作（スクロール・クリック）で閉じる処理 ───
+  useEffect(() => {
+    if (!popupEvent) return;
+
+    const handleCloseTrigger = () => {
+      setPopupEvent(null);
+    };
+
+    // 画面のスクロールを検知してポップアップを閉じる
+    window.addEventListener('scroll', handleCloseTrigger, { passive: true });
+    // モバイル端末でのスクロール（指でのスワイプ移動）も検知
+    window.addEventListener('touchmove', handleCloseTrigger, { passive: true });
+    // ポップアップ以外の領域（他のボタンなど含む）がクリックされたら閉じる
+    // ※キャプチャフェーズ(true)にすることで、他のボタンの通常処理が動く前に閉じることができます
+    window.addEventListener('click', handleCloseTrigger, true);
+
+    return () => {
+      window.removeEventListener('scroll', handleCloseTrigger);
+      window.removeEventListener('touchmove', handleCloseTrigger);
+      window.removeEventListener('click', handleCloseTrigger, true);
+    };
+  }, [popupEvent]);
 
   // ─── カレンダー全体のドラッグリサイズ処理（スクロール共存版） ───
 
   const startResize = (clientY: number, target: HTMLElement): boolean => {
-    // 1. 予定(イベント)やその中身、各種ボタンを直接触っている場合はリサイズしない
     if (
       target.closest('.rbc-event') || 
       target.closest('.custom-event-content') ||
@@ -83,10 +109,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
       return false;
     }
 
-    // 2. 【ホワイトリスト化】日付のマス(背景セル)または日付の数字部分を触っている場合のみリサイズを許可
     const isDayCell = target.closest('.rbc-day-bg') || target.closest('.rbc-date-cell');
     
-    // 日付マス以外（外枠の隙間、ナビゲーション、曜日ヘッダーなど）なら、処理をせず false を返す
     if (!isDayCell) {
       return false;
     }
@@ -104,7 +128,6 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     const handleMouseMove = (e: MouseEvent) => onMove(e.clientY);
     const handleTouchMove = (e: TouchEvent) => {
       if (isDragging.current && e.touches.length > 0) {
-        // 日付マス上でのドラッグ時のみ、画面スクロールを止めてカレンダーを伸ばす
         if (e.cancelable) e.preventDefault();
         onMove(e.touches[0].clientY);
       }
@@ -130,9 +153,8 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ events, onSelectEven
     startResize(e.clientY, e.target as HTMLElement);
   };
 
-const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
     if (e.touches.length > 0) {
-      // 変数 (const started =) を削除し、関数を呼び出すだけにします
       startResize(e.touches[0].clientY, e.target as HTMLElement);
     }
   };
@@ -143,7 +165,6 @@ const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       style={{ 
-        // touchAction を 'pan-y' に変更し、縦方向のスクロールをブラウザに許可する
         touchAction: 'pan-y',
         userSelect: 'none'
       }}
