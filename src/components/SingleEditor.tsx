@@ -87,10 +87,13 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
   const [timePreset, setTimePreset] = useState<string>('default');
   const [settings, setSettings] = useState<TimeSettings>(loadSettings);
 
+// 起動時に一番上の入力欄へ確実にフォーカスを当てる処理
   useEffect(() => {
-    const onStorage = () => setSettings(loadSettings());
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
+    // 50msほど僅かに遅延させることで、DOMのレンダリング完了を待って確実にカーソルを入れます
+    const id = setTimeout(() => {
+      focusAfterCheckbox(inputRef1.current);
+    }, 50);
+    return () => clearTimeout(id);
   }, []);
 
   const inputRef1 = useRef<HTMLInputElement>(null);
