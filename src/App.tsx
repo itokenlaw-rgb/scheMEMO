@@ -26,7 +26,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-  // 一括化（マージ）対象になっている元の□タスクたちのIDを一時保存するステート
+// 一括化、または直接クリックして編集対象になった元の「□タスク」のIDを一時保存するステート
   const [mergedTaskIds, setMergedTaskIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -81,8 +81,22 @@ function App() {
     refreshEvents();
   }, [refreshEvents]);
 
+// ① カレンダーの予定をクリックしたときの処理
   const handleSelectEvent = (event: CalendarEvent) => {
     setSelectedEvent(event);
+
+    const title = (event.title || '').trim();
+    // もしクリックされた予定が「□タスク」であれば、保存時に削除するためIDを記憶する
+    const isPureTask = 
+      title.startsWith('□') && 
+      !title.toUpperCase().includes('MEMO') && 
+      !event.isBatch;
+
+    if (isPureTask) {
+      setMergedTaskIds([event.id]);
+    } else {
+      setMergedTaskIds([]); // 通常のMEMOなどを開いたときはリセット
+    }
   };
 
   const handleSaveSingle = async (event: CalendarEvent) => {
@@ -105,6 +119,7 @@ function App() {
   };
 
   // 一括編集エディター（BatchEditor）で保存が確定したときに元のタスクを「☑」にする処理
+// ② 保存・更新が確定したときに元の「□タスク」を【削除】する処理へ変更
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
     console.log(`Saving batch in mode: ${saveMode}`);
@@ -114,6 +129,7 @@ function App() {
       try {
         // 1. 新しい □MEMO イベントをカレンダーへ作成または更新
         for (const event of eventsToSave) {
+          // ※ 新規作成、あるいは既存の「MEMO予定」自体の更新
           if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
             await updateGoogleEvent(accessToken, event);
           } else {
@@ -121,20 +137,12 @@ function App() {
           }
         }
 
-        // 2. 記憶していた統合元の「□タスク」があれば、すべて「☑」に変更して一括更新
+        // 2. 【変更】記憶していた統合元・クリック元の「□タスク」があれば、すべてカレンダーから削除
         if (mergedTaskIds.length > 0) {
-          const currentEvents = await fetchGoogleEvents(accessToken);
-          const tasksToComplete = currentEvents.filter(e => mergedTaskIds.includes(e.id));
-          
-          for (const task of tasksToComplete) {
-            const currentTitle = task.title || '';
-            if (currentTitle.startsWith('□')) {
-              const updatedTask: CalendarEvent = {
-                ...task,
-                title: currentTitle.replace(/^□/, '☑'),
-                status: 'checked'
-              };
-              await updateGoogleEvent(accessToken, updatedTask);
+          for (const taskId of mergedTaskIds) {
+            // 生成された仮想ID（evt-から始まるもの）以外を削除
+            if (!taskId.startsWith('evt-')) {
+              await deleteGoogleEvent(accessToken, taskId);
             }
           }
         }
@@ -157,17 +165,10 @@ function App() {
         }
       });
 
+      // 【変更】ローカル環境でも元の「□タスク」をモックデータから削除
       if (mergedTaskIds.length > 0) {
-        const currentEvents = getMockEvents();
-        currentEvents.forEach((task) => {
-          const currentTitle = task.title || '';
-          if (mergedTaskIds.includes(task.id) && currentTitle.startsWith('□')) {
-            updateMockEvent({
-              ...task,
-              title: currentTitle.replace(/^□/, '☑'),
-              status: 'checked'
-            });
-          }
+        mergedTaskIds.forEach(taskId => {
+          deleteMockEvent(taskId);
         });
       }
 
@@ -176,6 +177,12 @@ function App() {
       setMergedTaskIds([]);
     }
   };
+      setEvents(getMockEvents());
+      setSelectedEvent(null);
+      setMergedTaskIds([]);
+    }
+  };
+
 
   const handleCarryOver = (_items: BatchItem[], _timeOption: any) => {
     // コンパイルエラー対策でアンダースコアを付与
