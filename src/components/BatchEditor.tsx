@@ -363,27 +363,39 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver: _
         </button>
       </div>
 
-      {/* 下部アクションボタンエリア */}
+{/* 下部アクションボタンエリア */}
       <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'nowrap' }}>
         <button 
           className="btn btn-primary" 
           onClick={handleSaveOriginalTime} 
-          style={{ flex: 1, minHeight: '44px', gap: '0.25rem' }}
+          style={{ 
+            flex: 1, 
+            minHeight: '46px', // 2行で見切れないよう少し高さを確保
+            gap: '0.25rem',
+            lineHeight: '1.3', // 行間を詰めてスマートに
+            fontSize: '0.9rem' // 必要に応じて少し文字サイズを調整
+          }}
         >
-          ☑□保存
+          そのまま<br />新規保存
         </button>
 
         <button 
           className="btn btn-secondary" 
           onClick={handleUpdate21PMTime} 
-          style={{ flex: 1, minHeight: '44px', gap: '0.25rem' }}
+          style={{ 
+            flex: 1, 
+            minHeight: '46px', // 同様に高さを確保
+            gap: '0.25rem',
+            lineHeight: '1.3',
+            fontSize: '0.9rem'
+          }}
         >
-          ☑更新□
+          □と☑を<br />分けて更新
         </button>
 
         {initialEvent && (
-          <button className="btn btn-outline" onClick={onClose} style={{ minHeight: '44px' }}>
-            元に戻す
+          <button className="btn btn-outline" onClick={onClose} style={{ minHeight: '46px', fontSize: '0.9rem' }}>
+            キャンセル
           </button>
         )}
       </div>
