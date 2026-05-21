@@ -278,8 +278,76 @@ function App() {
     setSelectedEvent(oldest);
   };
 
+// src/App.tsx の該当箇所を書き換え
+
   const handleCollectAllMemos = () => {
-    console.log('□MEMOを集める click');
+    setIsLoading(true);
+    try {
+      // 1. すべてのイベントから「□MEMO」などのメモ予定を抽出
+      const memoEvents = events.filter(e => 
+        (e.title || '').toUpperCase().includes('MEMO') || e.isBatch
+      );
+
+      if (memoEvents.length === 0) {
+        alert("集める対象の「□MEMO」が見つかりませんでした。");
+        setIsLoading(false);
+        return;
+      }
+
+      // 2. メモ予定を開始時刻の古い順（時系列順）にソート
+      memoEvents.sort((a, b) => {
+        const timeA = new Date(a.start).getTime();
+        const timeB = new Date(b.start).getTime();
+        return timeA - timeB;
+      });
+
+      // 3. 古い順に並んだメモから、中の全タスク行を一つの配列にフラットに抽出
+      const allLines: string[] = [];
+      memoEvents.forEach(event => {
+        if (event.memo) {
+          const lines = event.memo
+            .split('\n')
+            .map(l => l.trim())
+            .filter(l => l !== '');
+          allLines.push(...lines);
+        }
+      });
+
+      if (allLines.length === 0) {
+        alert("抽出したメモの中にタスク（テキスト）がありませんでした。");
+        setIsLoading(false);
+        return;
+      }
+
+      // 4. 新しく生成する「まとめ□MEMO」のテキストとして結合
+      const combinedMemoContent = allLines.join('\n');
+
+      // 5. 本日の指定時刻（例: 21時）に配置する仮想の親イベントを作成
+      const now = new Date();
+      const memoStart = new Date(now);
+      memoStart.setHours(timeSettings.batchMemoSaveHour || 21, 0, 0, 0);
+      const memoEnd = new Date(memoStart);
+      memoEnd.setHours(memoStart.getHours() + 1);
+
+      const generatedCollectedMemo: CalendarEvent = {
+        id: `evt-${Date.now()}-collected`,
+        title: '□MEMO',
+        start: memoStart,
+        end: memoEnd,
+        memo: combinedMemoContent,
+        status: 'unchecked',
+        isBatch: true
+      };
+
+      // 6. BatchEditor に流し込むためにステートへセット
+      setSelectedEvent(generatedCollectedMemo);
+
+    } catch (error) {
+      console.error(error);
+      alert("メモの収集処理中にエラーが発生しました。");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSelectLatestMemo = () => {
