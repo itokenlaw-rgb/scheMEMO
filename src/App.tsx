@@ -9,9 +9,9 @@ import type { CalendarEvent, BatchItem } from './types';
 import type { TimeSettings } from './types/settings';
 import { loadSettings, saveSettings } from './types/settings';
 import {
-  getMockEvents, addMockEvent, updateMockEvent
+  getMockEvents, addMockEvent, updateMockEvent, deleteMockEvent
 } from './utils/calendarUtils';
-import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent } from './api/googleCalendar';
+import { fetchGoogleEvents, createGoogleEvent, updateGoogleEvent, deleteGoogleEvent } from './api/googleCalendar';
 import { Calendar as CalendarIcon, Settings, RefreshCw, Layers, LogIn, LogOut } from 'lucide-react';
 
 const TOKEN_LIFETIME_MS = 55 * 60 * 1000;
