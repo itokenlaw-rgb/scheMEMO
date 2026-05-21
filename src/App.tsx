@@ -26,7 +26,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [timeSettings, setTimeSettings] = useState<TimeSettings>(loadSettings);
 
-// 一括化、または直接クリックして編集対象になった元の「□タスク」のIDを一時保存するステート
+  // 一括化、または直接クリックして編集対象になった元の「□タスク」のIDを一時保存するステート
   const [mergedTaskIds, setMergedTaskIds] = useState<string[]>([]);
 
   useEffect(() => {
@@ -81,7 +81,7 @@ function App() {
     refreshEvents();
   }, [refreshEvents]);
 
-// ① カレンダーの予定をクリックしたときの処理
+  // ① カレンダーの予定をクリックしたときの処理
   const handleSelectEvent = (event: CalendarEvent) => {
     setSelectedEvent(event);
 
@@ -118,8 +118,7 @@ function App() {
     }
   };
 
-  // 一括編集エディター（BatchEditor）で保存が確定したときに元のタスクを「☑」にする処理
-// ② 保存・更新が確定したときに元の「□タスク」を【削除】する処理へ変更
+  // ② 保存・更新が確定したときに元の「□タスク」を【削除】する処理
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
     console.log(`Saving batch in mode: ${saveMode}`);
@@ -129,7 +128,6 @@ function App() {
       try {
         // 1. 新しい □MEMO イベントをカレンダーへ作成または更新
         for (const event of eventsToSave) {
-          // ※ 新規作成、あるいは既存の「MEMO予定」自体の更新
           if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
             await updateGoogleEvent(accessToken, event);
           } else {
@@ -137,10 +135,9 @@ function App() {
           }
         }
 
-        // 2. 【変更】記憶していた統合元・クリック元の「□タスク」があれば、すべてカレンダーから削除
+        // 2. 記憶していた統合元・クリック元の「□タスク」があれば、すべてカレンダーから削除
         if (mergedTaskIds.length > 0) {
           for (const taskId of mergedTaskIds) {
-            // 生成された仮想ID（evt-から始まるもの）以外を削除
             if (!taskId.startsWith('evt-')) {
               await deleteGoogleEvent(accessToken, taskId);
             }
@@ -165,7 +162,7 @@ function App() {
         }
       });
 
-      // 【変更】ローカル環境でも元の「□タスク」をモックデータから削除
+      // ローカル環境でも元の「□タスク」をモックデータから削除
       if (mergedTaskIds.length > 0) {
         mergedTaskIds.forEach(taskId => {
           deleteMockEvent(taskId);
@@ -177,12 +174,6 @@ function App() {
       setMergedTaskIds([]);
     }
   };
-      setEvents(getMockEvents());
-      setSelectedEvent(null);
-      setMergedTaskIds([]);
-    }
-  };
-
 
   const handleCarryOver = (_items: BatchItem[], _timeOption: any) => {
     // コンパイルエラー対策でアンダースコアを付与
@@ -193,9 +184,6 @@ function App() {
     saveSettings(settings);
     setShowSettings(false);
   };
-
-  // ── 「□タスクを⇩□MEMOにする」ボタンを押したときの処理 ──
-// src/App.tsx より、該当の handleMergeWeeklyMemos 関数周辺のみ抜粋
 
   // ── 「□タスクを⇩□MEMOにする」ボタンを押したときの処理 ──
   const handleMergeWeeklyMemos = async () => {
@@ -213,7 +201,7 @@ function App() {
       endRange.setDate(now.getDate() + timeSettings.mergeDaysAfter);
       endRange.setHours(23, 59, 59, 999);
 
-      // 2. ＜１＞「□」から始まるタスクを抽出し、＜２＞既に「□MEMO」になっているものは完全に除外
+      // 2. 「□」から始まるタスクを抽出し、既に「□MEMO」になっているものは完全に除外
       const targetTasks = currentEvents.filter((e: CalendarEvent) => {
         if (!e.start) return false;
         const eventDate = new Date(e.start);
@@ -235,11 +223,11 @@ function App() {
         return;
       }
 
-      // ── 【１の修正】集めたタスクを開始時刻の古い順（時系列順）に並び替える ──
+      // 集めたタスクを開始時刻の古い順（時系列順）に並び替える
       targetTasks.sort((a, b) => {
         const timeA = new Date(a.start).getTime();
         const timeB = new Date(b.start).getTime();
-        return timeA - timeB; // 古い順にソート
+        return timeA - timeB;
       });
 
       // 3. 時系列順にソートされたタスクのタイトルを1行ずつの箇条書きテキストにする
@@ -263,7 +251,7 @@ function App() {
         isBatch: true
       };
 
-      // 6. 保存時に「☑」へ書き換えるために、対象タスクのIDを一時保存
+      // 6. 保存時に削除（または☑へ変更）するために、対象タスクのIDを一時保存
       const taskIds = targetTasks.map(t => t.id);
       setMergedTaskIds(taskIds);
 
@@ -278,10 +266,8 @@ function App() {
     }
   };
 
-// ─── 【修正】「一番古いメモ」ボタンを押したときの処理 ───
+  // ─── 「一番古いメモ」ボタンを押したときの処理 ───
   const handleSelectOldestMemo = () => {
-    // 1. タイトルに「MEMO」が含まれる、または isBatch が true の予定を抽出
-    // ★【仕様変更】すでに「☑」から始まる完了済みのメモは [!e.title.startsWith('☑')] で完全に除外します
     const activeMemoEvents = events.filter(e => {
       const title = (e.title || '').trim();
       const isMemo = title.toUpperCase().includes('MEMO') || e.isBatch;
@@ -294,28 +280,23 @@ function App() {
       return;
     }
 
-    // 2. 残った未完了メモの中から、開始時刻が一番古いものを取得
     const oldestMemo = activeMemoEvents.reduce((old, current) => 
       new Date(current.start) < new Date(old.start) ? current : old
     );
 
-    // 3. ★【仕様変更】エディターで表示するときに、確実に最初からチェックが外れた状態（□MEMO）にするための変換
     const cleanTitle = oldestMemo.title.replace(/^[□☑△]\s*/, '').trim();
     const preparedMemoEvent: CalendarEvent = {
       ...oldestMemo,
-      title: `□ ${cleanTitle}`, // タイトルの先頭を強制的に「□」にする
-      status: 'unchecked'       // ステートを未チェック状態にする
+      title: `□ ${cleanTitle}`,
+      status: 'unchecked'
     };
 
-    // 4. 調整したイベントをエディターへセットして展開
     setSelectedEvent(preparedMemoEvent);
   };
-
 
   const handleCollectAllMemos = () => {
     setIsLoading(true);
     try {
-      // 1. すべてのイベントから「□MEMO」などのメモ予定を抽出
       const memoEvents = events.filter(e => 
         (e.title || '').toUpperCase().includes('MEMO') || e.isBatch
       );
@@ -326,14 +307,12 @@ function App() {
         return;
       }
 
-      // 2. メモ予定を開始時刻の古い順（時系列順）にソート
       memoEvents.sort((a, b) => {
         const timeA = new Date(a.start).getTime();
         const timeB = new Date(b.start).getTime();
         return timeA - timeB;
       });
 
-      // 3. 古い順に並んだメモから、中の全タスク行を一つの配列にフラットに抽出
       const allLines: string[] = [];
       memoEvents.forEach(event => {
         if (event.memo) {
@@ -351,10 +330,8 @@ function App() {
         return;
       }
 
-      // 4. 新しく生成する「まとめ□MEMO」のテキストとして結合
       const combinedMemoContent = allLines.join('\n');
 
-      // 5. 本日の指定時刻（例: 21時）に配置する仮想の親イベントを作成
       const now = new Date();
       const memoStart = new Date(now);
       memoStart.setHours(timeSettings.batchMemoSaveHour || 21, 0, 0, 0);
@@ -371,7 +348,6 @@ function App() {
         isBatch: true
       };
 
-      // 6. BatchEditor に流し込むためにステートへセット
       setSelectedEvent(generatedCollectedMemo);
 
     } catch (error) {
@@ -452,125 +428,116 @@ function App() {
           </div>
         </div>
 
-<BatchEditor
-  onSave={handleSaveBatch}
-  onCarryOver={handleCarryOver}
-  initialEvent={selectedEvent}
-  onClose={() => setSelectedEvent(null)}
-  // 【新設】抽出範囲内の ☑タスク を一括削除する処理
-  onDeleteCheckedTasks={() => {
-    // 1. 設定から抽出範囲（日前〜日後）の時間を計算
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - timeSettings.mergeDaysBefore);
-    start.setHours(0, 0, 0, 0);
+        <BatchEditor
+          onSave={handleSaveBatch}
+          onCarryOver={handleCarryOver}
+          initialEvent={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onDeleteCheckedTasks={() => {
+            const now = new Date();
+            const start = new Date(now);
+            start.setDate(now.getDate() - timeSettings.mergeDaysBefore);
+            start.setHours(0, 0, 0, 0);
 
-    const end = new Date(now);
-    end.setDate(now.getDate() + timeSettings.mergeDaysAfter);
-    end.setHours(23, 59, 59, 999);
+            const end = new Date(now);
+            end.setDate(now.getDate() + timeSettings.mergeDaysAfter);
+            end.setHours(23, 59, 59, 999);
 
-    // 2. 範囲内の「☑」から始まるタスク（MEMOを含まないもの）だけを厳密に抽出
-    const targets = events.filter(evt => {
-      const isWithinRange = evt.start >= start && evt.start <= end;
-      const isChecked = evt.title.trim().startsWith('☑');
-      const isMemo = evt.title.includes('MEMO');
-      return isWithinRange && isChecked && !isMemo;
-    });
+            const targets = events.filter(evt => {
+              if (!evt.start) return false;
+              const evtDate = new Date(evt.start);
+              const isWithinRange = evtDate >= start && evtDate <= end;
+              const isChecked = evt.title.trim().startsWith('☑');
+              const isMemo = evt.title.includes('MEMO');
+              return isWithinRange && isChecked && !isMemo;
+            });
 
-    if (targets.length === 0) {
-      alert('指定された抽出範囲内に、削除対象となる完了済みタスク（☑タスク）は見つかりませんでした。');
-      return;
-    }
+            if (targets.length === 0) {
+              alert('指定された抽出範囲内に、削除対象となる完了済みタスク（☑タスク）は見つかりませんでした。');
+              return;
+            }
 
-    if (window.confirm(`【確認】抽出範囲内の「☑タスク」を合計 ${targets.length} 件、完全に削除しますか？\n※□タスクやMEMOは絶対に削除されません。`)) {
-      // アラート音（ビープ音）を鳴らす
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // 高めのピピッという音
-      oscillator.connect(audioCtx.destination);
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.15);
+            if (window.confirm(`【確認】抽出範囲内の「☑タスク」を合計 ${targets.length} 件、完全に削除しますか？\n※□タスクやMEMOは絶対に削除されません。`)) {
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioCtx.createOscillator();
+              oscillator.type = 'sine';
+              oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
+              oscillator.connect(audioCtx.destination);
+              oscillator.start();
+              oscillator.stop(audioCtx.currentTime + 0.15);
 
-      // カレンダーDBから削除を実行
-      setIsLoading(true);
-      Promise.all(
-        targets.map(async (evt) => {
-          if (accessToken) {
-            await deleteGoogleEvent(accessToken, evt.id);
-          } else {
-            deleteMockEvent(evt.id);
-          }
-        })
-      ).then(() => {
-        // 画面の表示を更新
-        setEvents(prev => prev.filter(e => !targets.some(t => t.id === e.id)));
-        alert(`削除が完了しました。（対象: ☑タスク ${targets.length} 件）`);
-      }).catch(err => {
-        alert('削除中にエラーが発生しました: ' + err.message);
-      }).finally(() => {
-        setIsLoading(false);
-      });
-    }
-  }}
-  // 【新設】抽出範囲内の ☑MEMO を一括削除する処理
-  onDeleteCheckedMemos={() => {
-    // 1. 設定から抽出範囲（日前〜日後）の時間を計算
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - timeSettings.mergeDaysBefore);
-    start.setHours(0, 0, 0, 0);
+              setIsLoading(true);
+              Promise.all(
+                targets.map(async (evt) => {
+                  if (accessToken) {
+                    await deleteGoogleEvent(accessToken, evt.id);
+                  } else {
+                    deleteMockEvent(evt.id);
+                  }
+                })
+              ).then(() => {
+                setEvents(prev => prev.filter(e => !targets.some(t => t.id === e.id)));
+                alert(`削除が完了しました。（対象: ☑タスク ${targets.length} 件）`);
+              }).catch(err => {
+                alert('削除中にエラーが発生しました: ' + err.message);
+              }).finally(() => {
+                setIsLoading(false);
+              });
+            }
+          }}
+          onDeleteCheckedMemos={() => {
+            const now = new Date();
+            const start = new Date(now);
+            start.setDate(now.getDate() - timeSettings.mergeDaysBefore);
+            start.setHours(0, 0, 0, 0);
 
-    const end = new Date(now);
-    end.setDate(now.getDate() + timeSettings.mergeDaysAfter);
-    end.setHours(23, 59, 59, 999);
+            const end = new Date(now);
+            end.setDate(now.getDate() + timeSettings.mergeDaysAfter);
+            end.setHours(23, 59, 59, 999);
 
-    // 2. 範囲内の「☑」かつ「MEMO」から始まる予定だけを厳密に抽出
-    const targets = events.filter(evt => {
-      const isWithinRange = evt.start >= start && evt.start <= end;
-      // タイトルから空白を除いて「☑MEMO」で始まっているか判定
-      const cleanTitle = evt.title.replace(/\s+/g, '');
-      return isWithinRange && cleanTitle.startsWith('☑MEMO');
-    });
+            const targets = events.filter(evt => {
+              if (!evt.start) return false;
+              const evtDate = new Date(evt.start);
+              const isWithinRange = evtDate >= start && evtDate <= end;
+              const cleanTitle = evt.title.replace(/\s+/g, '');
+              return isWithinRange && cleanTitle.startsWith('☑MEMO');
+            });
 
-    if (targets.length === 0) {
-      alert('指定された抽出範囲内に、削除対象となる完了済みメモ（☑MEMO）は見つかりませんでした。');
-      return;
-    }
+            if (targets.length === 0) {
+              alert('指定された抽出範囲内に、削除対象となる完了済みメモ（☑MEMO）は見つかりませんでした。');
+              return;
+            }
 
-    if (window.confirm(`【警告】抽出範囲内の「☑MEMO」を合計 ${targets.length} 件、完全に削除しますか？\n※中の未完了タスク等が含まれている場合も一緒に消去されます。`)) {
-      // アラート音（ビープ音）を鳴らす
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // 少し低めの警告音
-      oscillator.connect(audioCtx.destination);
-      oscillator.start();
-      oscillator.stop(audioCtx.currentTime + 0.25);
+            if (window.confirm(`【警告】抽出範囲内の「☑MEMO」を合計 ${targets.length} 件、完全に削除しますか？\n※中の未完了タスク等が含まれている場合も一緒に消去されます。`)) {
+              const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+              const oscillator = audioCtx.createOscillator();
+              oscillator.type = 'sine';
+              oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+              oscillator.connect(audioCtx.destination);
+              oscillator.start();
+              oscillator.stop(audioCtx.currentTime + 0.25);
 
-      // カレンダーDBから削除を実行
-      setIsLoading(true);
-      Promise.all(
-        targets.map(async (evt) => {
-          if (accessToken) {
-            await deleteGoogleEvent(accessToken, evt.id);
-          } else {
-            deleteMockEvent(evt.id);
-          }
-        })
-      ).then(() => {
-        // 画面の表示を更新
-        setEvents(prev => prev.filter(e => !targets.some(t => t.id === e.id)));
-        setSelectedEvent(null); // 開いていたエディターも安全に閉じる
-        alert(`削除が完了しました。（対象: ☑MEMO ${targets.length} 件）`);
-      }).catch(err => {
-        alert('削除中にエラーが発生しました: ' + err.message);
-      }).finally(() => {
-        setIsLoading(false);
-      });
-    }
-  }}
-/>
+              setIsLoading(true);
+              Promise.all(
+                targets.map(async (evt) => {
+                  if (accessToken) {
+                    await deleteGoogleEvent(accessToken, evt.id);
+                  } else {
+                    deleteMockEvent(evt.id);
+                  }
+                })
+              ).then(() => {
+                setEvents(prev => prev.filter(e => !targets.some(t => t.id === e.id)));
+                setSelectedEvent(null);
+                alert(`削除が完了しました。（対象: ☑MEMO ${targets.length} 件）`);
+              }).catch(err => {
+                alert('削除中にエラーが発生しました: ' + err.message);
+              }).finally(() => {
+                setIsLoading(false);
+              });
+            }
+          }}
+        />
       </div>
 
       <div className="calendar-section">
