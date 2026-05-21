@@ -445,7 +445,125 @@ function App() {
           </div>
         </div>
 
-        <BatchEditor onSave={handleSaveBatch} onCarryOver={handleCarryOver} initialEvent={selectedEvent} onClose={() => { setSelectedEvent(null); setMergedTaskIds([]); }} />
+<BatchEditor
+  onSave={handleSaveBatch}
+  onCarryOver={handleCarryOver}
+  initialEvent={selectedEvent}
+  onClose={() => setSelectedEvent(null)}
+  // 【新設】抽出範囲内の ☑タスク を一括削除する処理
+  onDeleteCheckedTasks={() => {
+    // 1. 設定から抽出範囲（日前〜日後）の時間を計算
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() - timeSettings.mergeDaysBefore);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(now);
+    end.setDate(now.getDate() + timeSettings.mergeDaysAfter);
+    end.setHours(23, 59, 59, 999);
+
+    // 2. 範囲内の「☑」から始まるタスク（MEMOを含まないもの）だけを厳密に抽出
+    const targets = events.filter(evt => {
+      const isWithinRange = evt.start >= start && evt.start <= end;
+      const isChecked = evt.title.trim().startsWith('☑');
+      const isMemo = evt.title.includes('MEMO');
+      return isWithinRange && isChecked && !isMemo;
+    });
+
+    if (targets.length === 0) {
+      alert('指定された抽出範囲内に、削除対象となる完了済みタスク（☑タスク）は見つかりませんでした。');
+      return;
+    }
+
+    if (window.confirm(`【確認】抽出範囲内の「☑タスク」を合計 ${targets.length} 件、完全に削除しますか？\n※□タスクやMEMOは絶対に削除されません。`)) {
+      // アラート音（ビープ音）を鳴らす
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // 高めのピピッという音
+      oscillator.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.15);
+
+      // カレンダーDBから削除を実行
+      setIsLoading(true);
+      Promise.all(
+        targets.map(async (evt) => {
+          if (accessToken) {
+            await deleteGoogleEvent(accessToken, evt.id);
+          } else {
+            deleteMockEvent(evt.id);
+          }
+        })
+      ).then(() => {
+        // 画面の表示を更新
+        setEvents(prev => prev.filter(e => !targets.some(t => t.id === e.id)));
+        alert(`削除が完了しました。（対象: ☑タスク ${targets.length} 件）`);
+      }).catch(err => {
+        alert('削除中にエラーが発生しました: ' + err.message);
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    }
+  }}
+  // 【新設】抽出範囲内の ☑MEMO を一括削除する処理
+  onDeleteCheckedMemos={() => {
+    // 1. 設定から抽出範囲（日前〜日後）の時間を計算
+    const now = new Date();
+    const start = new Date(now);
+    start.setDate(now.getDate() - timeSettings.mergeDaysBefore);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(now);
+    end.setDate(now.getDate() + timeSettings.mergeDaysAfter);
+    end.setHours(23, 59, 59, 999);
+
+    // 2. 範囲内の「☑」かつ「MEMO」から始まる予定だけを厳密に抽出
+    const targets = events.filter(evt => {
+      const isWithinRange = evt.start >= start && evt.start <= end;
+      // タイトルから空白を除いて「☑MEMO」で始まっているか判定
+      const cleanTitle = evt.title.replace(/\s+/g, '');
+      return isWithinRange && cleanTitle.startsWith('☑MEMO');
+    });
+
+    if (targets.length === 0) {
+      alert('指定された抽出範囲内に、削除対象となる完了済みメモ（☑MEMO）は見つかりませんでした。');
+      return;
+    }
+
+    if (window.confirm(`【警告】抽出範囲内の「☑MEMO」を合計 ${targets.length} 件、完全に削除しますか？\n※中の未完了タスク等が含まれている場合も一緒に消去されます。`)) {
+      // アラート音（ビープ音）を鳴らす
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(440, audioCtx.currentTime); // 少し低めの警告音
+      oscillator.connect(audioCtx.destination);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.25);
+
+      // カレンダーDBから削除を実行
+      setIsLoading(true);
+      Promise.all(
+        targets.map(async (evt) => {
+          if (accessToken) {
+            await deleteGoogleEvent(accessToken, evt.id);
+          } else {
+            deleteMockEvent(evt.id);
+          }
+        })
+      ).then(() => {
+        // 画面の表示を更新
+        setEvents(prev => prev.filter(e => !targets.some(t => t.id === e.id)));
+        setSelectedEvent(null); // 開いていたエディターも安全に閉じる
+        alert(`削除が完了しました。（対象: ☑MEMO ${targets.length} 件）`);
+      }).catch(err => {
+        alert('削除中にエラーが発生しました: ' + err.message);
+      }).finally(() => {
+        setIsLoading(false);
+      });
+    }
+  }}
+/>
       </div>
 
       <div className="calendar-section">
