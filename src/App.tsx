@@ -118,7 +118,7 @@ function App() {
     }
   };
 
-  // ② 保存・更新が確定したときに元の「□タスク」を【削除】する処理
+  // ② 保存・更新が確定したときに元の「□タスク」を【削除】し、エディターをクリアする処理
   const handleSaveBatch = async (input: CalendarEvent | CalendarEvent[], saveMode: 'save' | 'update' = 'save') => {
     const eventsToSave = Array.isArray(input) ? input : [input];
     console.log(`Saving batch in mode: ${saveMode}`);
@@ -126,13 +126,9 @@ function App() {
     if (accessToken) {
       setIsLoading(true);
       try {
-        // 1. 新しい □MEMO イベントをカレンダーへ作成または更新
+        // 1. 新しい予定（□MEMOなど）を設定された時間の予定として新規追加
         for (const event of eventsToSave) {
-          if (selectedEvent && event.id === selectedEvent.id && !event.id.startsWith('evt-')) {
-            await updateGoogleEvent(accessToken, event);
-          } else {
-            await createGoogleEvent(accessToken, event);
-          }
+          await createGoogleEvent(accessToken, event);
         }
 
         // 2. 記憶していた統合元・クリック元の「□タスク」があれば、すべてカレンダーから削除
@@ -149,17 +145,13 @@ function App() {
         console.error(error);
       } finally {
         setIsLoading(false);
-        setSelectedEvent(null);
-        setMergedTaskIds([]); // 記憶リセット
+        setSelectedEvent(null);   // ✨ 確実にエディターの表示をクリアして閉じる
+        setMergedTaskIds([]);     // ✨ 記憶リセット
       }
     } else {
       // ローカル（Mock）環境用
       eventsToSave.forEach(event => {
-        if (selectedEvent && event.id === selectedEvent.id) {
-          updateMockEvent(event);
-        } else {
-          addMockEvent(event);
-        }
+        addMockEvent(event);
       });
 
       // ローカル環境でも元の「□タスク」をモックデータから削除
@@ -170,8 +162,8 @@ function App() {
       }
 
       setEvents(getMockEvents());
-      setSelectedEvent(null);
-      setMergedTaskIds([]);
+      setSelectedEvent(null);     // ✨ 確実にエディターの表示をクリアして閉じる
+      setMergedTaskIds([]);       // ✨ 記憶リセット
     }
   };
 
