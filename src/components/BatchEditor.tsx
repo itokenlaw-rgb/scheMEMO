@@ -11,10 +11,19 @@ interface BatchEditorProps {
   onCarryOver: (items: BatchItem[], timeOption: TimeOption) => void;
   initialEvent: CalendarEvent | null;
   onClose: () => void;
+  // ★ TypeScriptのエラーを解消するためにプロパティ定義を追加
+  onDeleteCheckedTasks: () => void;
+  onDeleteCheckedMemos: () => void;
 }
 
-// 【修正】使われていない onCarryOver の前にアンダースコア（_）を付与して、コンパイルエラーを回避します
-export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver: _onCarryOver, initialEvent, onClose }) => {
+export const BatchEditor: React.FC<BatchEditorProps> = ({ 
+  onSave, 
+  onCarryOver: _onCarryOver, 
+  initialEvent, 
+  onClose,
+  onDeleteCheckedTasks, // ★ 分割代入で受け取る
+  onDeleteCheckedMemos  // ★ 分割代入で受け取る
+}) => {
   const [items, setItems] = useState<BatchItem[]>([]);
   const [memoTitle, setMemoTitle] = useState('□MEMO');
   const [isTitleChecked, setIsTitleChecked] = useState(false);
@@ -363,41 +372,59 @@ export const BatchEditor: React.FC<BatchEditorProps> = ({ onSave, onCarryOver: _
         </button>
       </div>
 
-{/* 下部アクションボタンエリア */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1.5rem', flexWrap: 'nowrap' }}>
-        <button 
-          className="btn btn-primary" 
-          onClick={handleSaveOriginalTime} 
-          style={{ 
-            flex: 1, 
-            minHeight: '46px', // 2行で見切れないよう少し高さを確保
-            gap: '0.25rem',
-            lineHeight: '1.3', // 行間を詰めてスマートに
-            fontSize: '0.9rem' // 必要に応じて少し文字サイズを調整
-          }}
-        >
-          そのまま<br />新規保存
-        </button>
-
-        <button 
-          className="btn btn-secondary" 
-          onClick={handleUpdate21PMTime} 
-          style={{ 
-            flex: 1, 
-            minHeight: '46px', // 同様に高さを確保
-            gap: '0.25rem',
-            lineHeight: '1.3',
-            fontSize: '0.9rem'
-          }}
-        >
-          □と☑を<br />分けて更新
-        </button>
-
-        {initialEvent && (
-          <button className="btn btn-outline" onClick={onClose} style={{ minHeight: '46px', fontSize: '0.9rem' }}>
-            元に戻す
+      {/* 下部アクションボタンエリア */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '1.5rem' }}>
+        
+        {/* 上段：新設の「保存・更新」2行表示（自動翻訳防止つき） */}
+        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+          <button 
+            className="btn btn-primary btn-memo-action" 
+            translate="no"
+            onClick={handleSaveOriginalTime}
+          >
+            <div>そのまま</div>
+            <div>□☑保存</div>
           </button>
-        )}
+
+          <button 
+            className="btn btn-secondary btn-memo-action" 
+            translate="no"
+            onClick={handleUpdate21PMTime}
+          >
+            <div>□と☑を</div>
+            <div>分けて更新</div>
+          </button>
+        </div>
+
+        {/* 下段：削除ボタンとキャンセル（元に戻す） */}
+        <div style={{ display: 'flex', gap: '0.5rem', width: '100%' }}>
+          <button 
+            className="btn btn-outline" 
+            onClick={onDeleteCheckedTasks} 
+            style={{ flex: 1, minHeight: '44px', borderColor: '#ef4444', color: '#ef4444', backgroundColor: '#fff5f5', fontWeight: '600', fontSize: '0.8rem', padding: '0.25rem' }}
+          >
+            <Trash2 size={14} style={{ marginRight: '2px' }} /> ☑タスク削除
+          </button>
+
+          <button 
+            className="btn btn-outline" 
+            onClick={onDeleteCheckedMemos} 
+            style={{ flex: 1, minHeight: '44px', borderColor: '#b91c1c', color: '#b91c1c', backgroundColor: '#fef2f2', fontWeight: '600', fontSize: '0.8rem', padding: '0.25rem' }}
+          >
+            <Trash2 size={14} style={{ marginRight: '2px' }} /> ☑MEMO削除
+          </button>
+
+          {initialEvent && (
+            <button 
+              className="btn btn-outline" 
+              onClick={cleanupEditor} 
+              style={{ flex: 1, minHeight: '44px', fontSize: '0.8rem', padding: '0.25rem', fontWeight: '600' }}
+            >
+              元に戻す
+            </button>
+          )}
+        </div>
+
       </div>
    </div>
   );
