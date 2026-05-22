@@ -85,7 +85,7 @@ export const SingleEditor: React.FC<SingleEditorProps> = ({ onSave }) => {
   const [text2, setText2] = useState('□');
   const [text3, setText3] = useState('□');
   const [timePreset, setTimePreset] = useState<string>('default');
-  const [settings, setSettings] = useState<TimeSettings>(loadSettings);
+const [settings] = useState<TimeSettings>(loadSettings);
 
 // 起動時に一番上の入力欄へ確実にフォーカスを当てる処理
   useEffect(() => {
